@@ -6,8 +6,8 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
--- colorscheme: pick a decent builtin (tokyonight replacement)
-vim.cmd.colorscheme("habamax")
+-- colorscheme: tokyonight (storm), provided as a native colors/ file (no plugin)
+vim.cmd.colorscheme("tokyonight")
 
 -- netrw as file tree (nvim-tree replacement)
 vim.g.netrw_banner = 0
