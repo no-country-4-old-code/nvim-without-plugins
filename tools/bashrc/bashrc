@@ -1,0 +1,66 @@
+# ~./bashrc
+
+# -- exit if not interactive
+[[ $- != *i* ]] && return
+
+# -- history
+HISTSIZE=5000
+HISTFILESIZE=10000
+HISTCONTROL=ignoredups:erasedups
+HISTIGNORE="ls:ll:pwd:clear:history:exit"
+PROMPT_COMMAND='history -a; history -n'
+
+# -- shell options
+shopt -s checkwinsize
+shopt -s globstar
+shopt -s cdspell
+shopt -s histappend
+
+# -- editor
+export EDITOR=nvim
+export VISUAL=nvim
+
+# -- pager
+export PAGER=less
+export LESS='-FRX'
+
+# --- prompt (I like it simple) 
+PS1='\[\e[0;32m\]>\[\e[0m\] '
+
+# --- enable colors for ls and grep variant
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# --- alias 
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias c='clear'
+alias v='nvim'
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+
+alias g='git status'
+alias gc='git commit'
+alias gp='git push'
+alias gl='git pull'
+
+# --- man page in color :) 
+export LESS_TERMCAP_mb=$'\e[1;31m'     # begin bold
+export LESS_TERMCAP_md=$'\e[1;33m'     # begin blink
+export LESS_TERMCAP_so=$'\e[01;44;37m' # begin reverse video
+export LESS_TERMCAP_us=$'\e[01;37m'    # begin underline
+export LESS_TERMCAP_me=$'\e[0m'        # reset bold/blink
+export LESS_TERMCAP_se=$'\e[0m'        # reset reverse video
+export LESS_TERMCAP_ue=$'\e[0m'        # reset underline
+export GROFF_NO_SGR=1                  # for konsole and gnome-terminal
+
+# --- other stuff like PATHs
