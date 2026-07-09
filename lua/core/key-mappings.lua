@@ -68,28 +68,40 @@ function M.setup()
 		vim.cmd("Lexplore " .. vim.fn.fnameescape(vim.fn.expand("%:p:h")))
 	end
 
-	-- netrw-local keys: delegate to netrw's own <CR> (<Plug>NetrwLocalBrowseCheck),
-	-- then decide by focus: unchanged = folder toggled inline, moved = file opened.
+	-- shared l / <CR> / <Esc> keys for list-like windows (netrw tree, quickfix):
+	-- run the window's native open action, then decide by focus: unchanged =
+	-- nothing opened elsewhere (e.g. folder toggled inline), moved = entry opened.
+	-- l keeps focus in the list, <CR> jumps to the entry and closes the list.
+	local function set_list_keys(buf, native_open)
+		local function open_entry(after_open)
+			local list_win = vim.api.nvim_get_current_win()
+			if not pcall(vim.cmd, native_open) then return end
+			if vim.api.nvim_get_current_win() ~= list_win and vim.api.nvim_win_is_valid(list_win) then
+				after_open(list_win)
+			end
+		end
+		local opts = { buffer = buf }
+		vim.keymap.set("n", "l", function()
+			open_entry(vim.api.nvim_set_current_win)
+		end, opts)
+		vim.keymap.set("n", "<CR>", function()
+			open_entry(function(w) vim.api.nvim_win_close(w, true) end)
+		end, opts)
+		vim.keymap.set("n", "<Esc>", function()
+			pcall(vim.api.nvim_win_close, 0, true)
+		end, opts)
+	end
+
 	vim.api.nvim_create_autocmd("FileType", {
 		pattern = "netrw",
 		callback = function(args)
-			local function open_entry(after_file_open)
-				local tree_win = vim.api.nvim_get_current_win()
-				vim.cmd([[execute "normal \<Plug>NetrwLocalBrowseCheck"]])
-				if vim.api.nvim_get_current_win() ~= tree_win and vim.api.nvim_win_is_valid(tree_win) then
-					after_file_open(tree_win)
-				end
-			end
-			local opts = { buffer = args.buf }
-			vim.keymap.set("n", "l", function()
-				open_entry(vim.api.nvim_set_current_win) -- keep focus in tree
-			end, opts)
-			vim.keymap.set("n", "<CR>", function()
-				open_entry(function(w) vim.api.nvim_win_close(w, true) end) -- jump & close tree
-			end, opts)
-			vim.keymap.set("n", "<Esc>", function()
-				pcall(vim.api.nvim_win_close, 0, true)
-			end, opts)
+			set_list_keys(args.buf, [[execute "normal \<Plug>NetrwLocalBrowseCheck"]])
+		end,
+	})
+	vim.api.nvim_create_autocmd("FileType", {
+		pattern = "qf", -- grep results, diagnostics, references, ... (quickfix + loclist)
+		callback = function(args)
+			set_list_keys(args.buf, [[execute "normal! \<CR>"]])
 		end,
 	})
 
