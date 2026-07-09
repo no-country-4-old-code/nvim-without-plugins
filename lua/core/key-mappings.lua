@@ -68,6 +68,31 @@ function M.setup()
 		vim.cmd("Lexplore " .. vim.fn.fnameescape(vim.fn.expand("%:p:h")))
 	end
 
+	-- netrw-local keys: delegate to netrw's own <CR> (<Plug>NetrwLocalBrowseCheck),
+	-- then decide by focus: unchanged = folder toggled inline, moved = file opened.
+	vim.api.nvim_create_autocmd("FileType", {
+		pattern = "netrw",
+		callback = function(args)
+			local function open_entry(after_file_open)
+				local tree_win = vim.api.nvim_get_current_win()
+				vim.cmd([[execute "normal \<Plug>NetrwLocalBrowseCheck"]])
+				if vim.api.nvim_get_current_win() ~= tree_win and vim.api.nvim_win_is_valid(tree_win) then
+					after_file_open(tree_win)
+				end
+			end
+			local opts = { buffer = args.buf }
+			vim.keymap.set("n", "l", function()
+				open_entry(vim.api.nvim_set_current_win) -- keep focus in tree
+			end, opts)
+			vim.keymap.set("n", "<CR>", function()
+				open_entry(function(w) vim.api.nvim_win_close(w, true) end) -- jump & close tree
+			end, opts)
+			vim.keymap.set("n", "<Esc>", function()
+				pcall(vim.api.nvim_win_close, 0, true)
+			end, opts)
+		end,
+	})
+
 	local function browse_buffers()
 		local items = {}
 		for _, b in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
