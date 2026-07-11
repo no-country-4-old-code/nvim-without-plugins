@@ -35,15 +35,9 @@ vim.keymap.set("n", "<leader>2", function()
 		vim.notify("Compile failed:\n" .. result, vim.log.levels.ERROR)
 		return
 	end
-	require("dap").run({
-		name = "Launch (gdb)",
-		type = "cppdbg",
-		request = "launch",
-		program = vim.fn.getcwd() .. "/main",
-		cwd = "${workspaceFolder}",
-		stopAtEntry = true,
-		MIMode = "gdb",
-	})
+	-- built-in termdebug (see lua/core/debug.lua); gdb opens without running
+	-- the program, so set breakpoints (<leader>db) and continue (<leader>dc)
+	vim.cmd("Termdebug " .. vim.fn.getcwd() .. "/main")
 end, { desc = "compile & debug main.c" })
 
 vim.keymap.set("n", "<leader>3", function()
