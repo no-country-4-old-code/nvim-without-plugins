@@ -40,6 +40,9 @@ function M.open(opts)
 	local list_w = math.floor(ui_w / 2)
 	local prev_w = ui_w - list_w - 3 -- gap for the two borders between panes
 
+	-- tokyonight blue border for every pane of the overlay
+	vim.api.nvim_set_hl(0, "ListOverlayBorder", { fg = "#7aa2f7" })
+
 	local function make_buf()
 		local b = vim.api.nvim_create_buf(false, true)
 		vim.bo[b].bufhidden = "wipe"
@@ -51,7 +54,9 @@ function M.open(opts)
 		cfg.relative = "editor"
 		cfg.style = "minimal"
 		cfg.border = BORDER
-		return vim.api.nvim_open_win(buf, false, cfg)
+		local win = vim.api.nvim_open_win(buf, false, cfg)
+		vim.wo[win].winhighlight = "FloatBorder:ListOverlayBorder"
+		return win
 	end
 	local fwin = float(fbuf, {
 		row = row, col = col, width = ui_w, height = 1,
