@@ -29,22 +29,6 @@ function M.setup()
 		picker.pick(items, { prompt = "Keymaps" })
 	end
 
-	local function list_files()
-		if vim.fn.executable("rg") == 1 then
-			return vim.fn.systemlist({ "rg", "--files", "--hidden", "--glob", "!.git" })
-		elseif vim.fn.isdirectory(".git") == 1 then
-			return vim.fn.systemlist({ "git", "ls-files" })
-		end
-		return vim.fn.systemlist({ "find", ".", "-type", "f", "-not", "-path", "*/.git/*" })
-	end
-
-	local function find_files()
-		picker.pick(list_files(), {
-			prompt = "Files",
-			on_select = function(f) vim.cmd("edit " .. vim.fn.fnameescape(f)) end,
-		})
-	end
-
 	local function live_grep()
 		vim.ui.input({ prompt = "Grep: " }, function(q)
 			if not q or q == "" then return end
@@ -148,7 +132,7 @@ function M.setup()
 	-- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>ft", open_file_tree, { desc = "Navigation : Open file tree" })
 	vim.keymap.set("n", "<leader>fj", browse_jumplist, { desc = "Navigation : Browse jump history" })
-	vim.keymap.set("n", "<leader>ff", find_files, { desc = "Navigation : Search by file name" })
+	vim.keymap.set("n", "<leader>ff", require("commands.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>fg", live_grep, { desc = "Navigation : Search in file contents" })
 	vim.keymap.set("n", "<leader>fG", grep_word_under_cursor, { desc = "Navigation : Search word under cursor in file contents" })
 	vim.keymap.set("n", "<leader>fr", "<cmd>registers<CR>", { desc = "Navigation : Browse copy & paste registers" })
