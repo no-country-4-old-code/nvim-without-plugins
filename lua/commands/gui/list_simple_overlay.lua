@@ -17,12 +17,22 @@ local M = {}
 
 local BORDER = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
 local SCROLL = { down = vim.keycode("<C-e>"), up = vim.keycode("<C-y>") }
+local NS = vim.api.nvim_create_namespace("ListOverlayPreview") -- marks the focus line
 
 --- Open the overlay.
 --- @param opts table {
 ---   title         = string,                       -- shown on the filter box
----   items         = string[] | fun():string[],    -- rows to pick from
----   preview       = fun(item):string[],string?    -- optional: lines[, filetype]
+---   items         = string[] | fun():string[],    -- rows to pick from (static)
+---   on_query      = fun(query):string[],          -- optional: replaces the built-in
+---                                                  --   fuzzy filter with a live source,
+---                                                  --   re-run on every keystroke (e.g. rg)
+---   display       = fun(item):string              -- optional: how the item is shown
+---                                                  --   in the list (defaults to the item
+---                                                  --   itself); preview/on_select still get
+---                                                  --   the raw item
+---   preview       = fun(item):string[],string?,string?,integer?
+---                                                  -- optional: lines[, filetype[, window
+---                                                  --   title[, line to center on]]]
 ---   on_select     = fun(item)                      -- optional: <CR> action
 ---   start_on_list = boolean,                       -- default false; true starts
 ---                                                  --   focus on the list, not the filter
@@ -30,7 +40,7 @@ local SCROLL = { down = vim.keycode("<C-e>"), up = vim.keycode("<C-y>") }
 function M.open(opts)
 	opts = opts or {}
 	local items = type(opts.items) == "function" and opts.items() or opts.items or {}
-	if #items == 0 then
+	if not opts.on_query and #items == 0 then
 		vim.notify("Nothing to show", vim.log.levels.INFO)
 		return
 	end
@@ -47,6 +57,8 @@ function M.open(opts)
 
 	-- tokyonight blue border for every pane of the overlay
 	vim.api.nvim_set_hl(0, "ListOverlayBorder", { fg = "#7aa2f7" })
+	-- highlight for the matched line in the preview (theme-aware)
+	vim.api.nvim_set_hl(0, "ListOverlayMatch", { link = "Visual", default = true })
 
 	local function make_buf()
 		local b = vim.api.nvim_create_buf(false, true)
@@ -77,6 +89,7 @@ function M.open(opts)
 	})
 	vim.wo[lwin].cursorline = true
 	vim.wo[lwin].scrolloff = 2
+	vim.wo[lwin].wrap = false -- keep every list entry on a single line
 
 	local filtered = items
 
@@ -86,19 +99,34 @@ function M.open(opts)
 		if vim.api.nvim_win_is_valid(lwin) then
 			item = filtered[vim.api.nvim_win_get_cursor(lwin)[1]]
 		end
-		local lines, ft = {}, nil
+		local lines, ft, title, focus = {}, nil, nil, nil
 		if item and opts.preview then
-			lines, ft = opts.preview(item)
+			lines, ft, title, focus = opts.preview(item)
 		end
 		vim.bo[pbuf].modifiable = true
 		vim.api.nvim_buf_set_lines(pbuf, 0, -1, false, lines or {})
 		vim.bo[pbuf].modifiable = false
 		vim.bo[pbuf].filetype = ft or "" -- triggers FileType -> treesitter (init.lua)
+		if not vim.api.nvim_win_is_valid(pwin) then return end
+		vim.api.nvim_win_set_config(pwin, {
+			title = " " .. (title or "preview") .. " ", title_pos = "center",
+		})
+		vim.api.nvim_buf_clear_namespace(pbuf, NS, 0, -1)
+		if focus then -- put the interesting line in the middle and mark it
+			local n = vim.api.nvim_buf_line_count(pbuf)
+			local ln = math.min(math.max(focus, 1), n)
+			vim.api.nvim_win_set_cursor(pwin, { ln, 0 })
+			vim.api.nvim_win_call(pwin, function() vim.cmd("normal! zz") end)
+			vim.api.nvim_buf_set_extmark(pbuf, NS, ln - 1, 0, {
+				line_hl_group = "ListOverlayMatch",
+			})
+		end
 	end
 
 	local function render_list()
 		vim.bo[lbuf].modifiable = true
-		vim.api.nvim_buf_set_lines(lbuf, 0, -1, false, filtered)
+		local rows = opts.display and vim.tbl_map(opts.display, filtered) or filtered
+		vim.api.nvim_buf_set_lines(lbuf, 0, -1, false, rows)
 		vim.bo[lbuf].modifiable = false
 		if #filtered > 0 then
 			vim.api.nvim_win_set_cursor(lwin, { 1, 0 })
@@ -108,7 +136,11 @@ function M.open(opts)
 
 	local function refilter()
 		local query = vim.api.nvim_buf_get_lines(fbuf, 0, 1, false)[1] or ""
-		filtered = query == "" and items or vim.fn.matchfuzzy(items, query)
+		if opts.on_query then -- live source (e.g. rg): query drives the results
+			filtered = query == "" and {} or (opts.on_query(query) or {})
+		else -- static list: fuzzy-narrow it locally
+			filtered = query == "" and items or vim.fn.matchfuzzy(items, query)
+		end
 		render_list()
 	end
 
