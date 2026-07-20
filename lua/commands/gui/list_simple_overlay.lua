@@ -129,11 +129,13 @@ function M.open(opts)
 		vim.cmd("stopinsert")
 		vim.api.nvim_set_current_win(lwin)
 	end
-	local function select()
-		local item = filtered[vim.api.nvim_win_get_cursor(lwin)[1]]
+	local function choose(item)
 		close()
 		if item and opts.on_select then opts.on_select(item) end
 	end
+	-- <CR> from the list picks the highlighted row; from the filter, the first match
+	local function select_highlighted() choose(filtered[vim.api.nvim_win_get_cursor(lwin)[1]]) end
+	local function select_first() choose(filtered[1]) end
 	-- run a scroll motion inside the (unfocused) preview window
 	local function scroll_preview(keys)
 		if not vim.api.nvim_win_is_valid(pwin) then return end
@@ -146,10 +148,10 @@ function M.open(opts)
 	end
 	map(fbuf, { "i", "n" }, "<Tab>", focus_list)
 	map(fbuf, { "i", "n" }, "<Esc>", close)
-	map(fbuf, { "i", "n" }, "<CR>", select)
+	map(fbuf, { "i", "n" }, "<CR>", select_first)
 	map(lbuf, "n", "<Tab>", focus_filter)
 	map(lbuf, "n", "<Esc>", close)
-	map(lbuf, "n", "<CR>", select)
+	map(lbuf, "n", "<CR>", select_highlighted)
 	-- arrow keys scroll the preview while focus stays on the list
 	map(lbuf, "n", "<Down>", function() scroll_preview(SCROLL.down) end)
 	map(lbuf, "n", "<Up>", function() scroll_preview(SCROLL.up) end)
