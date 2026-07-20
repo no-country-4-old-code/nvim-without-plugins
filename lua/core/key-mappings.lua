@@ -168,7 +168,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>tx", "<cmd>tabclose<CR>", { desc = "Tabs : Close current tab (tabs)" })
 
 	-- git ----------------------------------------------------------------------
-	vim.keymap.set("n", "<leader>gq", git.status, { desc = "Git : Open git status (quick overview)" })
+	vim.keymap.set("n", "<leader>gq", require("commands.git_status").open, { desc = "Git : Open git status (quick overview)" })
 	vim.keymap.set("n", "<leader>gs", git.diff_against_index, { desc = "Git : Diff current file vs index (working tree diff)" })
 	vim.keymap.set("n", "<leader>gc", function() git.commits() end, { desc = "Git : Browse commits" })
 	vim.keymap.set("n", "<leader>gb", git.branches, { desc = "Git : Browse branches" })
