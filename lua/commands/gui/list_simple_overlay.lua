@@ -4,23 +4,28 @@
 -- widget backs "find files", "rg files", "git status", ...
 --
 -- Keys (defined here, inherited by every command):
---   <Tab>  toggle focus filter <-> list
---   j / k  move in the list (native motion; preview follows the cursor)
---   <CR>   run on_select on the highlighted item, then close
---   <Esc>  close the overlay
+--   <Tab>          toggle focus filter <-> list
+--   j / k          move in the list (native motion; preview follows the cursor)
+--   <Up>/<Down>    scroll the preview window (while focus is on the list)
+--   <Left>/<Right> scroll the preview horizontally
+--   <CR>           run on_select on the highlighted item, then close
+--   <Esc>          close the overlay
 --
 -- Fuzzy filtering lives here (vim.fn.matchfuzzy), matching core.picker.
 
 local M = {}
 
 local BORDER = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
+local SCROLL = { down = vim.keycode("<C-e>"), up = vim.keycode("<C-y>") }
 
 --- Open the overlay.
 --- @param opts table {
----   title     = string,                       -- shown on the filter box
----   items     = string[] | fun():string[],    -- rows to pick from
----   preview   = fun(item):string[],string?    -- optional: lines[, filetype]
----   on_select = fun(item)                      -- optional: <CR> action
+---   title         = string,                       -- shown on the filter box
+---   items         = string[] | fun():string[],    -- rows to pick from
+---   preview       = fun(item):string[],string?    -- optional: lines[, filetype]
+---   on_select     = fun(item)                      -- optional: <CR> action
+---   start_on_list = boolean,                       -- default false; true starts
+---                                                  --   focus on the list, not the filter
 --- }
 function M.open(opts)
 	opts = opts or {}
@@ -129,6 +134,11 @@ function M.open(opts)
 		close()
 		if item and opts.on_select then opts.on_select(item) end
 	end
+	-- run a scroll motion inside the (unfocused) preview window
+	local function scroll_preview(keys)
+		if not vim.api.nvim_win_is_valid(pwin) then return end
+		vim.api.nvim_win_call(pwin, function() vim.cmd("normal! " .. keys) end)
+	end
 
 	-- keymaps -------------------------------------------------------------
 	local function map(buf, modes, lhs, fn)
@@ -140,8 +150,11 @@ function M.open(opts)
 	map(lbuf, "n", "<Tab>", focus_filter)
 	map(lbuf, "n", "<Esc>", close)
 	map(lbuf, "n", "<CR>", select)
+	-- arrow keys scroll the preview while focus stays on the list
+	map(lbuf, "n", "<Down>", function() scroll_preview(SCROLL.down) end)
+	map(lbuf, "n", "<Up>", function() scroll_preview(SCROLL.up) end)
 
-	-- live refresh --------------------------------------------------------
+    -- live refresh --------------------------------------------------------
 	vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
 		buffer = fbuf, callback = refilter,
 	})
@@ -150,7 +163,7 @@ function M.open(opts)
 	})
 
 	render_list()
-	focus_filter()
+	if opts.start_on_list then focus_list() else focus_filter() end
 end
 
 return M
