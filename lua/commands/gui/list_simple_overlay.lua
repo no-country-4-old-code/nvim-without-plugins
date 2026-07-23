@@ -36,6 +36,8 @@ local NS = vim.api.nvim_create_namespace("ListOverlayPreview") -- marks the focu
 ---   on_select     = fun(item)                      -- optional: <CR> action
 ---   start_on_list = boolean,                       -- default false; true starts
 ---                                                  --   focus on the list, not the filter
+---   query         = string,                        -- optional: prefill the filter box
+---                                                  --   (and run the initial filter)
 --- }
 function M.open(opts)
 	opts = opts or {}
@@ -196,7 +198,12 @@ function M.open(opts)
 		buffer = lbuf, callback = update_preview,
 	})
 
-	render_list()
+	if opts.query and opts.query ~= "" then
+		vim.api.nvim_buf_set_lines(fbuf, 0, 1, false, { opts.query })
+		refilter() -- run the initial filter with the prefilled query
+	else
+		render_list()
+	end
 	if opts.start_on_list then focus_list() else focus_filter() end
 end
 

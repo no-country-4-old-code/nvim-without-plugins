@@ -13,7 +13,7 @@ local function parse(line)
 	return file, tonumber(lnum), tonumber(col), text
 end
 
-function M.open()
+function M.open(query)
 	if vim.fn.executable("rg") == 0 then
 		vim.notify("ripgrep (rg) not found", vim.log.levels.WARN)
 		return
@@ -21,6 +21,7 @@ function M.open()
 
 	overlay.open({
 		title = "Rip grep",
+		query = query, -- optional: prefill the filter box (e.g. word under cursor)
 		on_query = function(query) -- typed in the filter box; run on every keystroke
 			return vim.fn.systemlist({
 				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git", "-e", query,
