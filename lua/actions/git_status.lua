@@ -2,7 +2,7 @@
 -- live diff preview of the highlighted file. <CR> opens the file, <Esc> closes.
 -- Same overlay as find_files / rg files.
 
-local overlay = require("commands.gui.list_simple_overlay")
+local overlay = require("actions.gui.list_simple_overlay")
 
 local M = {}
 

@@ -3,7 +3,7 @@
 -- and the list shows the matches. <CR> jumps to file:line:col, <Esc> closes.
 -- Same overlay as find_files / git_status.
 
-local overlay = require("commands.gui.list_simple_overlay")
+local overlay = require("actions.gui.list_simple_overlay")
 
 local M = {}
 

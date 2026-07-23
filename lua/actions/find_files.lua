@@ -2,7 +2,7 @@
 -- live preview of the highlighted file. <CR> opens it, <Esc> closes.
 -- The same overlay is meant to back "rg files", "git status", etc.
 
-local overlay = require("commands.gui.list_simple_overlay")
+local overlay = require("actions.gui.list_simple_overlay")
 
 local M = {}
 
