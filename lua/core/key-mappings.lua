@@ -152,7 +152,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>gq", require("actions.git_status").open, { desc = "Git : Open git status (quick overview)" })
 	vim.keymap.set("n", "<leader>gs", git.diff_against_index, { desc = "Git : Diff current file vs index (working tree diff)" })
 	vim.keymap.set("n", "<leader>gc", function() git.commits() end, { desc = "Git : Browse commits" })
-	vim.keymap.set("n", "<leader>gb", git.branches, { desc = "Git : Browse branches" })
+	vim.keymap.set("n", "<leader>gb", require("actions.git_branch").open, { desc = "Git : Browse branches (list overlay)" })
 
 	-- git history -------------------------------------------------------------
 	vim.keymap.set("n", "<leader>hr", git.repo_history, { desc = "Git-History: View repo history" })
