@@ -103,25 +103,6 @@ function M.setup()
 		})
 	end
 
-	local function browse_jumplist()
-		local jumps = vim.fn.getjumplist()[1]
-		local items = {}
-		for i = #jumps, 1, -1 do
-			local j = jumps[i]
-			local name = j.bufnr and vim.fn.bufname(j.bufnr) or ""
-			if name ~= "" then
-				items[#items + 1] = { text = string.format("%s:%d", vim.fn.fnamemodify(name, ":~:."), j.lnum), j = j }
-			end
-		end
-		picker.pick(items, {
-			prompt = "Jumplist",
-			on_select = function(it)
-				vim.cmd("buffer " .. it.j.bufnr)
-				pcall(vim.api.nvim_win_set_cursor, 0, { it.j.lnum, it.j.col })
-			end,
-		})
-	end
-
 	local lsp_border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
 	local function lsp_hover() vim.lsp.buf.hover({ border = lsp_border }) end
 	local function lsp_signature() vim.lsp.buf.signature_help({ border = lsp_border }) end
@@ -131,7 +112,7 @@ function M.setup()
 
 	-- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>ft", open_file_tree, { desc = "Navigation : Open file tree" })
-	vim.keymap.set("n", "<leader>fj", browse_jumplist, { desc = "Navigation : Browse jump history" })
+	vim.keymap.set("n", "<leader>fj", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (list overlay)" })
 	vim.keymap.set("n", "<leader>ff", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>fg", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
 	vim.keymap.set("n", "<leader>fG", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
