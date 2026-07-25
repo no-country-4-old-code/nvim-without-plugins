@@ -7,6 +7,8 @@ local overlay = require("actions.gui.list_simple_overlay")
 
 local M = {}
 
+local MAX_RESULTS = 1000 -- cap rows in the list; rg can match far more than is useful
+
 -- "file:line:col:text" (rg --vimgrep) -> its pieces
 local function parse(line)
 	local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
@@ -23,9 +25,13 @@ function M.open(query)
 		title = "Rip grep",
 		query = query, -- optional: prefill the filter box (e.g. word under cursor)
 		on_query = function(query) -- typed in the filter box; run on every keystroke
-			return vim.fn.systemlist({
+			local results = vim.fn.systemlist({
 				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git", "-e", query,
 			})
+			if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
+				results = vim.list_slice(results, 1, MAX_RESULTS)
+			end
+			return results
 		end,
 		display = function(line) -- list rows drop the file name: "line: matched text"
 			local _, lnum, _, text = parse(line)
