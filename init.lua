@@ -33,6 +33,11 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.opt.wildoptions:append("fuzzy")
 vim.opt.path:append("**")
 
+-- "/" searches case-insensitively, unless the pattern contains an upper-case
+-- letter -- same smart-case rule as grepprg / the rip-grep action.
+vim.o.ignorecase = true
+vim.o.smartcase = true
+
 -- load custom settings (unchanged from the full config)
 require("custom.enforce-unix-eol").setup()
 require("custom.line-numbers").setup()
