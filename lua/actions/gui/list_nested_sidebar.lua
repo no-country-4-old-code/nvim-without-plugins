@@ -40,6 +40,9 @@ local MARKER = { open = "▾ ", closed = "▸ ", leaf = "  " }
 ---                                            --   window next to the sidebar
 ---   on_select = fun(node, win),             -- optional: <CR> on a leaf
 ---                                            --   (default: on_open)
+---   reveal    = string[],                    -- optional: keys from the root down
+---                                            --   to a node -- they start unfolded
+---                                            --   and the cursor opens on the last
 ---   width     = integer,                    -- default 30
 ---   side      = "left" | "right",           -- default "left"
 ---   filetype  = string,                     -- default "nestedsidebar"; a second
@@ -207,7 +210,25 @@ function M.open(opts)
 	map("h", collapse)
 	map("<CR>", function() activate(true) end)
 
+	-- reveal: unfold the whole chain, then park the cursor on its last node (keys
+	-- of leaves are unfolded too -- harmless, is_parent decides what folds)
+	local wanted
+	for _, k in ipairs(opts.reveal or {}) do
+		expanded[k] = true
+		wanted = k
+	end
+
 	render()
+
+	if wanted then
+		for i, row in ipairs(rows) do
+			if key(row.node) == wanted then
+				vim.api.nvim_win_set_cursor(win, { i, 0 })
+				fit_view()
+				break
+			end
+		end
+	end
 end
 
 return M

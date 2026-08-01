@@ -1,7 +1,9 @@
 -- Command built on the nested sidebar: a file tree of the project.
 -- Root is $NVIM_ROOT when set and non-empty, else the cwd (same rule as
--- actions.rip_grep). l unfolds a folder / opens a file in the window to the
--- right without leaving the tree, <CR> opens it and jumps there, <Esc> closes.
+-- actions.rip_grep). It opens with the current file revealed: every folder on
+-- its path unfolded and the cursor on it. l unfolds a folder / opens a file in
+-- the window to the right without leaving the tree, h folds the folder above,
+-- <CR> opens it and jumps there, <Esc> closes.
 
 local sidebar = require("actions.gui.list_nested_sidebar")
 
@@ -37,10 +39,26 @@ local function entries(dir)
 	return items
 end
 
+-- node keys from the root down to path (root first), nil when the file is not
+-- on disk or lives outside the tree -- the sidebar unfolds exactly this chain
+local function chain(root, path)
+	if path == "" or vim.fn.filereadable(path) ~= 1 then return nil end
+	path = vim.fn.fnamemodify(path, ":p")
+	if path:sub(1, #root + 1) ~= root .. "/" then return nil end
+	local keys, cur = { root }, root
+	for part in path:sub(#root + 2):gmatch("[^/]+") do
+		cur = cur .. "/" .. part
+		keys[#keys + 1] = cur
+	end
+	return keys
+end
+
 function M.open()
 	local dir = root_dir()
+	local file = vim.api.nvim_buf_get_name(0) -- before the split steals focus
 
 	sidebar.open({
+		reveal = chain(dir, file), -- start on the current file, path unfolded
 		title = "Files",
 		filetype = "filetree",
 		root = node(dir, vim.fn.fnamemodify(dir, ":~")),
