@@ -36,19 +36,25 @@ function M.open(query)
 		title = dir and ("Rip grep  " .. vim.fn.fnamemodify(dir, ":~")) or "Rip grep",
 		query = query, -- optional: prefill the filter box (e.g. word under cursor)
 		on_query = function(query) -- typed in the filter box; run on every keystroke
+			-- don't run for small input
+			if #query < 3 then
+				return {}
+			end
+
+            -- build command
 			local cmd = {
 				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git", "-e", query,
 			}
-			if dir then 
-                -- adding "dir" to end of command to search there instead of cwd
+			if dir then
+				-- adding "dir" to end of command to search there instead of cwd
 				table.insert(cmd, dir)
 			end
 
-            -- run
+			-- run
 			local results = vim.fn.systemlist(cmd)
-			
-            -- trim results to prevent nvim from collapse
-            if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
+
+			-- trim results to prevent nvim from collapse
+			if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
 				results = vim.list_slice(results, 1, MAX_RESULTS)
 			end
 			return results
