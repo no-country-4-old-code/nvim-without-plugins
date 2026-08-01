@@ -8,6 +8,8 @@
 --   l        parent node : fold / unfold it
 --            leaf node   : on_open in the window next to the sidebar,
 --                          focus stays in the list
+--   h        unfolded parent : fold it
+--            anything else   : jump to the parent node and fold it
 --   <CR>     parent node : same as l
 --            leaf node   : same as l, but jump to that window and close the list
 --   <Esc>    close the sidebar
@@ -154,12 +156,34 @@ function M.open(opts)
 		end
 	end
 
+	-- h: one level out. on an unfolded parent that is the node itself, anywhere
+	-- else the cursor jumps to the parent row and folds it away.
+	local function collapse()
+		local line = vim.api.nvim_win_get_cursor(win)[1]
+		local row = rows[line]
+		if not row then return end
+		if is_parent(row.node) and expanded[key(row.node)] then
+			expanded[key(row.node)] = nil
+			render()
+			return
+		end
+		for i = line - 1, 1, -1 do
+			if rows[i].depth < row.depth then
+				expanded[key(rows[i].node)] = nil
+				vim.api.nvim_win_set_cursor(win, { i, 0 })
+				render()
+				return
+			end
+		end
+	end
+
 	-- keymaps ---------------------------------------------------------------
 	local function map(lhs, fn)
 		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
 	end
 	map("<Esc>", close)
 	map("l", function() activate(false) end)
+	map("h", collapse)
 	map("<CR>", function() activate(true) end)
 
 	render()
