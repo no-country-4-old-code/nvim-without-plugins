@@ -13,7 +13,6 @@ local M = {}
 
 -- do not pop up a menu before that many word characters were typed
 local MIN_CHARS = 2
-
 -- text before the cursor looks like a (partial) path: ./foo, ~/ba, src/ma
 local PATH_PATTERN = "[%w%._%-%$~/\\]*[/\\][%w%._%-%$]*$"
 

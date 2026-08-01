@@ -47,6 +47,7 @@ require("custom.dep-graph").setup()
 
 -- plugin replacements
 require("behaviour.auto-complete").setup()
+require("behaviour.git-signs").setup()
 require("core.lsp").setup()
 require("core.debug").setup()
 require("core.statusline").setup()
