@@ -1,13 +1,13 @@
 -- Git change markers in the sign column (replaces gitsigns.nvim).
 --
 -- Compares the buffer against its version in the git index and marks
---   "+"  lines that were added
---   "~"  lines that were modified
--- in green. The sign column is only turned on for buffers that actually
--- have changes -- unmodified files keep the gutter (and therefore the line
--- numbers) exactly where they were.
---
--- Deleted lines are not marked (nothing left to put a sign on).
+--   "+"  lines that were added      (green)
+--   "~"  lines that were modified   (green)
+--   "_"  lines were deleted here    (red, on the line above the gap -- the
+--        deleted text itself is gone, so there is no own line to mark)
+-- The sign column is only turned on for buffers that actually have changes --
+-- unmodified files keep the gutter (and therefore the line numbers) exactly
+-- where they were.
 
 local M = {}
 
@@ -15,6 +15,7 @@ local ns = vim.api.nvim_create_namespace("git-signs")
 
 local SIGN_ADD = "+"
 local SIGN_CHANGE = "~"
+local SIGN_DELETE = "_"
 local DEBOUNCE_MS = 200
 
 local timers = {} -- buf -> uv timer
@@ -23,6 +24,7 @@ local function set_highlights()
 	-- tokyonight greens
 	vim.api.nvim_set_hl(0, "GitSignAdd", { fg = "#9ece6a" })
 	vim.api.nvim_set_hl(0, "GitSignChange", { fg = "#73daca" })
+	vim.api.nvim_set_hl(0, "GitSignDelete", { fg = "#914c54" })
 end
 
 -- signcolumn is window-local: set it per window *for this buffer only*
@@ -55,20 +57,40 @@ local function apply(buf, index_text)
 	})
 	if not ok or not hunks then return clear(buf) end
 
-	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-	local any = false
+	-- collect first, place once: every line gets at most one sign
+	local marks = {}
+	local function sign(row, text, hl)
+		marks[math.max(0, math.min(row, #lines - 1))] = { text, hl }
+	end
+
 	for _, hunk in ipairs(hunks) do
 		local old_count, start, count = hunk[2], hunk[3], hunk[4]
-		if count > 0 then -- count == 0 -> pure deletion, nothing to mark
+		if count == 0 then
+			-- pure deletion: `start` is the buffer line the removed text
+			-- followed (0 if it was removed at the top of the file)
+			sign(start - 1, SIGN_DELETE, "GitSignDelete")
+		else
 			local added = old_count == 0
 			for lnum = start, start + count - 1 do
-				pcall(vim.api.nvim_buf_set_extmark, buf, ns, lnum - 1, 0, {
-					sign_text = added and SIGN_ADD or SIGN_CHANGE,
-					sign_hl_group = added and "GitSignAdd" or "GitSignChange",
-				})
+				sign(lnum - 1, added and SIGN_ADD or SIGN_CHANGE,
+					added and "GitSignAdd" or "GitSignChange")
 			end
-			any = true
+			-- hunk replaced more lines than it produced: last line is a
+			-- change *and* a deletion -> keep "~", but in the delete color
+			if old_count > count then
+				sign(start + count - 1, SIGN_CHANGE, "GitSignDelete")
+			end
 		end
+	end
+
+	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+	local any = false
+	for row, mark in pairs(marks) do
+		pcall(vim.api.nvim_buf_set_extmark, buf, ns, row, 0, {
+			sign_text = mark[1],
+			sign_hl_group = mark[2],
+		})
+		any = true
 	end
 	show_signcolumn(buf, any)
 end
