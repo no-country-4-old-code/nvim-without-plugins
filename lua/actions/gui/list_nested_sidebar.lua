@@ -15,7 +15,8 @@
 --   <Esc>    close the sidebar
 --
 -- The tree is rebuilt from children() on every fold/unfold, so it never shows a
--- stale view of its source.
+-- stale view of its source. Rows too long for the narrow window are not
+-- truncated: the view follows the cursor and shifts sideways (see fit_view).
 
 local M = {}
 
@@ -77,6 +78,7 @@ function M.open(opts)
 	vim.wo[win].signcolumn = "no"
 	vim.wo[win].cursorline = true
 	vim.wo[win].wrap = false
+	vim.wo[win].sidescrolloff = 0 -- so a shifted row ends flush with the window
 	if opts.title then -- splits have no border title: use the winbar instead
 		vim.wo[win].winbar = "%=" .. opts.title:gsub("%%", "%%%%") .. "%="
 	end
@@ -84,6 +86,22 @@ function M.open(opts)
 	-- tree state ----------------------------------------------------------
 	local expanded = { [key(opts.root)] = true } -- root starts unfolded
 	local rows = {} -- flat view of the tree: { node = ..., depth = ... }
+
+	-- the sidebar is narrow, so a deep path runs out of the window. shift the
+	-- view to the end of the row under the cursor instead of truncating it: the
+	-- indent scrolls out of sight, the name stays readable. parking the cursor
+	-- on the last character is what makes neovim scroll -- setting leftcol alone
+	-- is undone at the next redraw, which keeps the cursor visible.
+	local function fit_view()
+		if not vim.api.nvim_win_is_valid(win) then return end
+		local line = vim.api.nvim_win_get_cursor(win)[1]
+		local text = vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1] or ""
+		local col = 0
+		if vim.fn.strdisplaywidth(text) > vim.api.nvim_win_get_width(win) then
+			col = math.max(vim.fn.byteidx(text, vim.fn.strchars(text) - 1), 0)
+		end
+		vim.api.nvim_win_set_cursor(win, { line, col })
+	end
 
 	local function render()
 		rows = {}
@@ -110,6 +128,7 @@ function M.open(opts)
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 		vim.bo[buf].modifiable = false
 		vim.api.nvim_win_set_cursor(win, { math.min(line, #lines), 0 })
+		fit_view()
 	end
 
 	-- actions --------------------------------------------------------------
@@ -181,6 +200,8 @@ function M.open(opts)
 	local function map(lhs, fn)
 		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
 	end
+	vim.api.nvim_create_autocmd("CursorMoved", { buffer = buf, callback = fit_view })
+
 	map("<Esc>", close)
 	map("l", function() activate(false) end)
 	map("h", collapse)
