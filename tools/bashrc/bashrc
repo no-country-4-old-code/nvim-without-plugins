@@ -64,4 +64,9 @@ export LESS_TERMCAP_se=$'\e[0m'        # reset reverse video
 export LESS_TERMCAP_ue=$'\e[0m'        # reset underline
 export GROFF_NO_SGR=1                  # for konsole and gnome-terminal
 
+# --- nvim
+# Search root for nvim's rip-grep action. Empty -> nvim searches the directory
+# it was started in. Set it to pin searches to a fixed project root.
+export NVIM_ROOT=
+
 # --- other stuff like PATHs

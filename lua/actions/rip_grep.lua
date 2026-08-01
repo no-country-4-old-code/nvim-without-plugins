@@ -9,6 +9,15 @@ local M = {}
 
 local MAX_RESULTS = 1000 -- cap rows in the list; rg can match far more than is useful
 
+-- Search root: $NVIM_ROOT when set and non-empty, else nil -> rg searches the cwd
+-- (the path nvim was started in), i.e. the unchanged default behaviour.
+local function root()
+	local dir = vim.env.NVIM_ROOT
+	if dir and dir ~= "" then
+		return vim.fn.expand(dir)
+	end
+end
+
 -- "file:line:col:text" (rg --vimgrep) -> its pieces
 local function parse(line)
 	local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
@@ -21,14 +30,25 @@ function M.open(query)
 		return
 	end
 
+	local dir = root()
+
 	overlay.open({
-		title = "Rip grep",
+		title = dir and ("Rip grep  " .. vim.fn.fnamemodify(dir, ":~")) or "Rip grep",
 		query = query, -- optional: prefill the filter box (e.g. word under cursor)
 		on_query = function(query) -- typed in the filter box; run on every keystroke
-			local results = vim.fn.systemlist({
+			local cmd = {
 				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git", "-e", query,
-			})
-			if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
+			}
+			if dir then 
+                -- adding "dir" to end of command to search there instead of cwd
+				table.insert(cmd, dir)
+			end
+
+            -- run
+			local results = vim.fn.systemlist(cmd)
+			
+            -- trim results to prevent nvim from collapse
+            if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
 				results = vim.list_slice(results, 1, MAX_RESULTS)
 			end
 			return results
