@@ -1,4 +1,4 @@
--- Native LSP setup (nvim >= 0.11). Replaces nvim-lspconfig, mason, blink.cmp.
+-- Native LSP setup (nvim >= 0.11). Replaces nvim-lspconfig and mason.
 -- Requires the server binaries on $PATH (clangd, rust-analyzer, pyright, ...).
 
 local M = {}
@@ -73,10 +73,7 @@ function M.setup()
 				vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
 			end
 
-			-- built-in autocompletion (replaces blink.cmp)
-			if client:supports_method("textDocument/completion") then
-				vim.lsp.completion.enable(true, client.id, args.buf, { autotrigger = true })
-			end
+			-- autocompletion lives in behaviour.auto-complete (replaces blink.cmp)
 
 			-- format on demand via gq (replaces conform for LSP-backed filetypes)
 			vim.bo[args.buf].formatexpr = "v:lua.vim.lsp.formatexpr()"

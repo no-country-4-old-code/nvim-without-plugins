@@ -46,6 +46,7 @@ require("custom.dep-graph").setup()
 -- custom.cppcheck is required on demand from a project's .nvim.lua (see its header)
 
 -- plugin replacements
+require("behaviour.auto-complete").setup()
 require("core.lsp").setup()
 require("core.debug").setup()
 require("core.statusline").setup()
