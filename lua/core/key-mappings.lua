@@ -112,6 +112,7 @@ function M.setup()
 
 	-- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>ft", open_file_tree, { desc = "Navigation : Open file tree" })
+	vim.keymap.set("n", "<leader>fp", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })
 	vim.keymap.set("n", "<leader>fj", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (list overlay)" })
 	vim.keymap.set("n", "<leader>ff", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>fg", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
