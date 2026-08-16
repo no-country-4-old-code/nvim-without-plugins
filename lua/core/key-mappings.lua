@@ -120,8 +120,9 @@ function M.setup()
 	vim.keymap.set("n", "<leader>fr", "<cmd>registers<CR>", { desc = "Navigation : Browse copy & paste registers" })
 	vim.keymap.set("n", "<leader>fb", browse_buffers, { desc = "Navigation : Browse open buffers" })
 	vim.keymap.set("n", "<leader>w", windows.pick_window_to_jump, { desc = "Navigation : Pick window to jump to" })
-	vim.keymap.set("n", "<C-o>", "<C-o>", { desc = "Navigation : Jump back to previous position" })
-	vim.keymap.set("n", "<C-i>", "<C-i>", { desc = "Navigation : Jump forward again" })
+	local history = require("custom.cursor-history") -- richer than vim's jumplist: every visited area
+	vim.keymap.set("n", "<C-o>", history.back, { desc = "Navigation : Go back to previous position" })
+	vim.keymap.set("n", "<C-i>", history.forward, { desc = "Navigation : Go forward again" })
 	vim.keymap.set({ "n", "o", "x" }, ",", "^", { desc = "Navigation : Set cursor to start of line" })
 	vim.keymap.set({ "n", "o", "x" }, ".", "$", { desc = "Navigation : Set cursor to end of line" })
 

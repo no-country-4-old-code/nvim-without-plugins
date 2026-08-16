@@ -41,6 +41,7 @@ vim.o.smartcase = true
 -- load custom settings (unchanged from the full config)
 require("custom.enforce-unix-eol").setup()
 require("custom.line-numbers").setup()
+require("custom.cursor-history").setup()
 require("custom.tabs").setup()
 require("custom.dep-graph").setup()
 -- custom.cppcheck is required on demand from a project's .nvim.lua (see its header)
