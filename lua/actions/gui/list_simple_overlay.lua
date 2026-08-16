@@ -151,6 +151,9 @@ function M.open(opts)
 	local function close()
 		if closed then return end
 		closed = true
+		-- the filter box runs in insert mode: never hand that mode over to
+		-- whatever the overlay leaves the cursor in
+		vim.cmd("stopinsert")
 		for _, w in ipairs({ fwin, lwin, pwin }) do
 			if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
 		end
@@ -196,6 +199,11 @@ function M.open(opts)
 	})
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		buffer = lbuf, callback = update_preview,
+	})
+	-- same for every other way out of the filter box (mouse click, :wincmd, a
+	-- second overlay closing this one, ...): leave insert mode behind
+	vim.api.nvim_create_autocmd("BufLeave", {
+		buffer = fbuf, callback = function() vim.cmd("stopinsert") end,
 	})
 
 	if opts.query and opts.query ~= "" then
