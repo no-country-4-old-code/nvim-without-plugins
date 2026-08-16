@@ -1,9 +1,8 @@
 -- Auto-completion without a plugin (replaces blink.cmp).
 --
--- Sources, chosen per buffer (like blink's "lsp, path, snippets, buffer"):
---   * LSP  -- vim.lsp.completion (snippets are expanded by it on accept)
---   * path -- built-in i_CTRL-X_CTRL-F, auto-triggered while typing a path
---   * buffer/window words -- built-in i_CTRL-N, used when no LSP is attached
+-- Deliberately dumb and therefore fast: the only source is the keywords of the
+-- current file (built-in i_CTRL-N with 'complete' set to "."). No LSP request,
+-- no path scan, no other buffers -- nothing that can block while typing.
 --
 -- Keys:  <Tab> accept (selects the first entry if none is selected),
 --        <S-Tab> previous entry, <C-n>/<C-p> next/previous, <C-e> dismiss.
@@ -12,53 +11,19 @@
 local M = {}
 
 -- do not pop up a menu before that many word characters were typed
-local MIN_CHARS = 2
--- text before the cursor looks like a (partial) path: ./foo, ~/ba, src/ma
-local PATH_PATTERN = "[%w%._%-%$~/\\]*[/\\][%w%._%-%$]*$"
+local MIN_CHARS = 3
 
 local function completion_disabled(buf)
 	-- no menus in prompts, terminals, netrw, the overlay lists, ...
 	return vim.bo[buf].buftype ~= "" or vim.bo[buf].filetype == "netrw"
 end
 
-local function has_lsp_completion(buf)
-	for _, client in ipairs(vim.lsp.get_clients({ bufnr = buf })) do
-		if client:supports_method("textDocument/completion") then return true end
-	end
-	return false
-end
-
-local function feed(keys)
-	vim.api.nvim_feedkeys(vim.keycode(keys), "n", false)
-end
-
--- what (if anything) should be completed at the cursor
-local function trigger_for(buf, line_before_cursor)
-	if line_before_cursor:match(PATH_PATTERN) then return "path" end
-	if not line_before_cursor:match("[%w_]$") then return nil end
-	if #(line_before_cursor:match("[%w_]*$")) < MIN_CHARS then return nil end
-	return has_lsp_completion(buf) and "lsp" or "buffer"
-end
-
 function M.setup()
-	-- menu also for a single match, never insert/select on our own, show the
-	-- documentation of the selected entry in a popup next to the menu
-	vim.opt.completeopt = { "menu", "menuone", "noselect", "popup" }
-	-- keyword source: this buffer, visible windows, loaded buffers (skip the
-	-- slow default extras like tag files and included files)
-	vim.o.complete = ".,w,b"
+	-- menu also for a single match, never insert/select on our own
+	vim.opt.completeopt = { "menu", "menuone", "noselect" }
+	-- keyword source: this buffer only
+	vim.o.complete = "."
 	vim.opt.shortmess:append("c") -- no "match 1 of 5" / "Pattern not found" spam
-
-	-- LSP source: trigger characters ('.', '->', '::', ...) are handled by
-	-- nvim itself, plain word typing by the autocmd below.
-	vim.api.nvim_create_autocmd("LspAttach", {
-		callback = function(args)
-			local client = vim.lsp.get_client_by_id(args.data.client_id)
-			if client and client:supports_method("textDocument/completion") then
-				vim.lsp.completion.enable(true, client.id, args.buf, { autotrigger = true })
-			end
-		end,
-	})
 
 	-- auto-trigger while typing ------------------------------------------------
 	local skip_next = false -- accepting an entry ends on a word char -> would re-open
@@ -78,15 +43,10 @@ function M.setup()
 
 			local col = vim.api.nvim_win_get_cursor(0)[2]
 			local before = vim.api.nvim_get_current_line():sub(1, col)
-			local trigger = trigger_for(args.buf, before)
+			local word = before:match("[%w_]*$")
+			if #word < MIN_CHARS then return end
 
-			if trigger == "path" then
-				feed("<C-x><C-f>")
-			elseif trigger == "lsp" then
-				vim.lsp.completion.get() -- async, unlike i_CTRL-X_CTRL-O
-			elseif trigger == "buffer" then
-				feed("<C-n>")
-			end
+			vim.api.nvim_feedkeys(vim.keycode("<C-n>"), "n", false)
 		end,
 	})
 
