@@ -13,6 +13,15 @@ with **zero plugins** and **all keymaps preserved** (same bindings, same descrip
   - `gdb` — debugging via built-in **termdebug**
   - `cppcheck`, `graphviz` — for the unchanged `custom/cppcheck.lua` and `:CDeps`
 
+## Environment
+
+- `NVIM_GIT_REF_BASE` — branch or commit to treat as the review base. When set,
+  the git signs in the gutter (`f` / `F` jump between changed blocks) and the
+  `<leader>gq` status overlay show the changes towards that ref instead of the
+  changes towards the index / `HEAD`:
+  `NVIM_GIT_REF_BASE=origin/main nvim src/foo.c`. An unknown ref falls back to
+  the default with a warning.
+
 ## Install
 
 Copy this folder to `~/.config/nvim` (backup the old one first).

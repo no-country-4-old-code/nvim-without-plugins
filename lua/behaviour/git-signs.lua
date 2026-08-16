@@ -1,6 +1,7 @@
 -- Git change markers in the sign column (replaces gitsigns.nvim).
 --
--- Compares the buffer against its version in the git index and marks
+-- Compares the buffer against its version in the git index -- or in
+-- $NVIM_GIT_REF_BASE when that names a branch / commit (see core.git-ref) -- and marks
 --   "+"  lines that were added      (green)
 --   "~"  lines that were modified   (green)
 --   "_"  lines were deleted here    (red, on the line above the gap -- the
@@ -95,17 +96,18 @@ local function apply(buf, index_text)
 	show_signcolumn(buf, any)
 end
 
---- read the file's index version (async, so typing never blocks) and diff it
+--- read the file's base version (async, so typing never blocks) and diff it
 local function update(buf)
 	if not tracked(buf) then return end
 	local file = vim.api.nvim_buf_get_name(buf)
 	local dir, name = vim.fs.dirname(file), vim.fs.basename(file)
-	local ok = pcall(vim.system, { "git", "--no-optional-locks", "show", ":./" .. name }, {
+	local base = require("core.git-ref").get(dir) or "" -- "" -> the index
+	local ok = pcall(vim.system, { "git", "--no-optional-locks", "show", base .. ":./" .. name }, {
 		cwd = dir,
 		text = true,
 	}, vim.schedule_wrap(function(res)
 		if not vim.api.nvim_buf_is_valid(buf) then return end
-		-- no repo / file not in the index (untracked, new file): no signs
+		-- no repo / file not in the base version (untracked, new file): no signs
 		if res.code ~= 0 then return clear(buf) end
 		apply(buf, res.stdout)
 	end))
