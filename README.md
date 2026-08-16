@@ -17,10 +17,9 @@ with **zero plugins** and **all keymaps preserved** (same bindings, same descrip
 
 - `NVIM_GIT_REF_BASE` — branch or commit to treat as the review base. When set,
   the git signs in the gutter (`f` / `F` jump between changed blocks) and the
-  `<leader>gq` status overlay show the changes towards that ref instead of the
-  changes towards the index / `HEAD`:
-  `NVIM_GIT_REF_BASE=origin/main nvim src/foo.c`. An unknown ref falls back to
-  the default with a warning.
+  `gs` change list compare against that ref instead of against the index
+  / `HEAD`: `NVIM_GIT_REF_BASE=origin/main nvim src/foo.c`. An unknown ref falls
+  back to the default with a warning.
 
 ## Install
 
@@ -35,7 +34,7 @@ Copy this folder to `~/.config/nvim` (backup the old one first).
 | lspconfig, mason, blink.cmp | native `vim.lsp.config/enable` + built-in autocompletion (`lua/core/lsp.lua`) |
 | trouble, calltree | native loclist / quickfix (symbols, incoming/outgoing calls) |
 | diffview `<leader>gs` | `lua/core/git.lua` — `:diffsplit` against git index; `f`/`t` hunk jump, `<leader>gp/gl` diffput/get, `q` closes |
-| telescope git / fugitive | pickers over `git status/log/branch` (`<leader>gq/gc/gb`), checkout on select |
+| telescope git / fugitive | `gs` lists every changed block (`path:line  text`, rg-style) with its diff as preview; pickers over `git log/branch` (`<leader>gc/gb`), checkout on select |
 | diffview history | `git show`/`git diff`/`git log` in scratch tabs (`<leader>hf/hd/hr`, `q` closes) |
 | nvim-dap + dap-ui | built-in **termdebug** (`lua/core/debug.lua`) — `<leader>dc` asks for the executable on first start |
 | window-picker | `lua/core/windows.lua` — letter labels per window |
