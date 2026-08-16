@@ -9,6 +9,30 @@ local M = {}
 
 local MAX_RESULTS = 1000 -- cap rows in the list; rg can match far more than is useful
 
+local MIN_CHARS = 3 -- shorter query: don't search at all
+local RUSH_CHARS = 6 -- from this length on: search immediately, the query is specific
+local PAUSE_MS = 250 -- short query: only search after this long without new input
+
+-- Debounce: a short query matches half the tree, so rg blocks nvim long enough
+-- that typing freezes. Wait for a typing pause before starting it.
+--
+-- `runs` counts calls: every call takes a ticket, then waits -- if a later call
+-- took a ticket meanwhile (re-entry through the event loop) this one is stale
+-- and gives up. The wait also peeks at the input queue (getchar(1), which does
+-- not consume), because a blocking wait is exactly when keystrokes pile up
+-- there unprocessed: they are the "new input" we want to abort for.
+--
+-- Returns true when nothing happened for PAUSE_MS, i.e. rg may run.
+local runs = 0
+local function typing_paused()
+	runs = runs + 1
+	local mine = runs
+	local interrupted = vim.wait(PAUSE_MS, function()
+		return runs ~= mine or vim.fn.getchar(1) ~= 0
+	end, 20)
+	return not interrupted
+end
+
 -- Search root: $NVIM_ROOT when set and non-empty, else nil -> rg searches the cwd
 -- (the path nvim was started in), i.e. the unchanged default behaviour.
 local function root()
@@ -31,14 +55,21 @@ function M.open(query)
 	end
 
 	local dir = root()
+	local last = {} -- results of the last rg run; shown while the query is still growing
 
 	overlay.open({
 		title = dir and ("Rip grep  " .. vim.fn.fnamemodify(dir, ":~")) or "Rip grep",
 		query = query, -- optional: prefill the filter box (e.g. word under cursor)
 		on_query = function(query) -- typed in the filter box; run on every keystroke
 			-- don't run for small input
-			if #query < 3 then
-				return {}
+			if #query < MIN_CHARS then
+				last = {}
+				return last
+			end
+
+			-- short query: only run it once the typing stopped
+			if #query < RUSH_CHARS and not typing_paused() then
+				return last -- keep the list as is until the next keystroke lands
 			end
 
             -- build command
@@ -57,6 +88,7 @@ function M.open(query)
 			if #results > MAX_RESULTS then -- keep the list snappy; show only the first N
 				results = vim.list_slice(results, 1, MAX_RESULTS)
 			end
+			last = results
 			return results
 		end,
 		display = function(line) -- list rows drop the file name: "line: matched text"
