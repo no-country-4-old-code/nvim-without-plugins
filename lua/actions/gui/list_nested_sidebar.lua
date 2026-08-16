@@ -20,22 +20,26 @@
 
 local M = {}
 
-local MARKER = { open = "▾ ", closed = "▸ ", leaf = "  " }
+local NS = vim.api.nvim_create_namespace("nested_sidebar")
 
 --- Open the sidebar.
 --- @param opts table {
----   title     = string,                     -- shown on the window bar
 ---   root      = any,                        -- top node, handed back untouched
 ---   children  = fun(node):any[],            -- child nodes of a parent node
 ---   is_parent = fun(node):boolean,          -- optional: can node be unfolded
 ---                                            --   (default: nothing is a parent)
----   label     = fun(node):string,           -- optional: row text without indent
----                                            --   and fold marker (default tostring)
+---   label     = fun(node):string,           -- optional: row text without the
+---                                            --   indent (default tostring)
+---   highlight = fun(node):string|nil,       -- optional: highlight group the row
+---                                            --   is painted in (default: none)
 ---   key       = fun(node):string,           -- optional: stable id used to
 ---                                            --   remember the fold state
 ---                                            --   (default tostring -- only fine
 ---                                            --   when children() returns the
 ---                                            --   very same nodes every time)
+---   on_activate = fun(node):boolean,        -- optional: first say on l / <CR>;
+---                                            --   return true to keep the widget
+---                                            --   from folding / opening the node
 ---   on_open   = fun(node, win),             -- optional: l on a leaf; win is the
 ---                                            --   window next to the sidebar
 ---   on_select = fun(node, win),             -- optional: <CR> on a leaf
@@ -53,6 +57,7 @@ function M.open(opts)
 	local children = opts.children or function() return {} end
 	local is_parent = opts.is_parent or function() return false end
 	local label = opts.label or tostring
+	local highlight = opts.highlight or function() return nil end
 	local key = opts.key or tostring
 	local width = opts.width or 30
 	local left = opts.side ~= "right"
@@ -82,9 +87,6 @@ function M.open(opts)
 	vim.wo[win].cursorline = true
 	vim.wo[win].wrap = false
 	vim.wo[win].sidescrolloff = 0 -- so a shifted row ends flush with the window
-	if opts.title then -- splits have no border title: use the winbar instead
-		vim.wo[win].winbar = "%=" .. opts.title:gsub("%%", "%%%%") .. "%="
-	end
 
 	-- tree state ----------------------------------------------------------
 	local expanded = { [key(opts.root)] = true } -- root starts unfolded
@@ -118,18 +120,26 @@ function M.open(opts)
 		end
 		add(opts.root, 0)
 
+		-- no fold markers: what a row is shows in its highlight, whether it is
+		-- unfolded shows in the rows below it
 		local lines = {}
 		for i, row in ipairs(rows) do
-			local marker = MARKER.leaf
-			if is_parent(row.node) then
-				marker = expanded[key(row.node)] and MARKER.open or MARKER.closed
-			end
-			lines[i] = string.rep("  ", row.depth) .. marker .. label(row.node)
+			lines[i] = string.rep("  ", row.depth) .. label(row.node)
 		end
 		local line = vim.api.nvim_win_get_cursor(win)[1]
 		vim.bo[buf].modifiable = true
 		vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 		vim.bo[buf].modifiable = false
+		vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
+		for i, row in ipairs(rows) do
+			local group = highlight(row.node)
+			if group then
+				vim.api.nvim_buf_set_extmark(buf, NS, i - 1, 0, {
+					end_col = #lines[i],
+					hl_group = group,
+				})
+			end
+		end
 		vim.api.nvim_win_set_cursor(win, { math.min(line, #lines), 0 })
 		fit_view()
 	end
@@ -162,6 +172,7 @@ function M.open(opts)
 	local function activate(jump)
 		local row = rows[vim.api.nvim_win_get_cursor(win)[1]]
 		if not row then return end
+		if opts.on_activate and opts.on_activate(row.node) then return end
 		if is_parent(row.node) then
 			local k = key(row.node)
 			expanded[k] = not expanded[k] or nil
