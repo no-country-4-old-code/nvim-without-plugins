@@ -15,12 +15,14 @@
 --   <Esc>    close the sidebar
 --
 -- The tree is rebuilt from children() on every fold/unfold, so it never shows a
--- stale view of its source. Rows too long for the narrow window are not
--- truncated: the view follows the cursor and shifts sideways (see fit_view).
+-- stale view of its source. The sidebar is narrow, so instead of truncating deep
+-- rows the view scrolls sideways -- but only when the cursor walks into a folder
+-- that does not read, or back out to one that does not (see fit_view).
 
 local M = {}
 
 local NS = vim.api.nvim_create_namespace("nested_sidebar")
+local INDENT = 2 -- columns per level -- also the sideways shift per level
 
 --- Open the sidebar.
 --- @param opts table {
@@ -92,20 +94,57 @@ function M.open(opts)
 	local expanded = { [key(opts.root)] = true } -- root starts unfolded
 	local rows = {} -- flat view of the tree: { node = ..., depth = ... }
 
-	-- the sidebar is narrow, so a deep path runs out of the window. shift the
-	-- view to the end of the row under the cursor instead of truncating it: the
-	-- indent scrolls out of sight, the name stays readable. parking the cursor
-	-- on the last character is what makes neovim scroll -- setting leftcol alone
-	-- is undone at the next redraw, which keeps the cursor visible.
+	-- the sidebar is narrow, so a deep path runs out of the window. the view
+	-- scrolls sideways, but it sticks: it only moves when the cursor needs it to.
+	--   going in   -- some row of the folder the cursor sits in is cut off on the
+	--                 right : scroll left (indent steps) until it reads, at most
+	--                 up to the indent of that folder, so no name is ever cut on
+	--                 the left
+	--   going out  -- the third folder up the tree is cut off on the left :
+	--                 scroll back until it reads with one indent of air in front
+	-- Everything in between leaves the view where it is. The cursor has to sit on
+	-- the first shown column -- setting leftcol alone is undone at the next
+	-- redraw, which keeps the cursor visible.
+	local shift, was_deep = 0, 0
+
+	-- width of the widest row of the folder around line (its rows at that depth)
+	local function folder_width(line, depth)
+		local widest = 0
+		local function scan(from, to, step)
+			for i = from, to, step do
+				if rows[i].depth < depth then return end
+				if rows[i].depth == depth then
+					local w = INDENT * depth + vim.fn.strdisplaywidth(label(rows[i].node))
+					widest = math.max(widest, w)
+				end
+			end
+		end
+		scan(line, 1, -1)
+		scan(line + 1, #rows, 1)
+		return widest
+	end
+
 	local function fit_view()
 		if not vim.api.nvim_win_is_valid(win) then return end
 		local line = vim.api.nvim_win_get_cursor(win)[1]
-		local text = vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1] or ""
-		local col = 0
-		if vim.fn.strdisplaywidth(text) > vim.api.nvim_win_get_width(win) then
-			col = math.max(vim.fn.byteidx(text, vim.fn.strchars(text) - 1), 0)
+		local row = rows[line]
+		if not row then return end
+		local depth = row.depth
+		local width = vim.api.nvim_win_get_width(win)
+
+		if depth < was_deep then -- left the folder: give the third parent back
+			shift = math.min(shift, math.max((depth - 4) * INDENT, 0))
+		else -- entered a folder: only scroll if it does not read as it is
+			local missing = folder_width(line, depth) - width
+			local wanted = math.ceil(missing / INDENT) * INDENT
+			shift = math.min(math.max(shift, wanted), depth * INDENT)
 		end
+		was_deep = depth
+
+		local text = vim.api.nvim_buf_get_lines(buf, line - 1, line, false)[1] or ""
+		local col = math.min(shift, math.max(#text - 1, 0))
 		vim.api.nvim_win_set_cursor(win, { line, col })
+		vim.api.nvim_win_call(win, function() vim.fn.winrestview({ leftcol = col }) end)
 	end
 
 	local function render()
@@ -124,7 +163,7 @@ function M.open(opts)
 		-- unfolded shows in the rows below it
 		local lines = {}
 		for i, row in ipairs(rows) do
-			lines[i] = string.rep("  ", row.depth) .. label(row.node)
+			lines[i] = string.rep(" ", INDENT * row.depth) .. label(row.node)
 		end
 		local line = vim.api.nvim_win_get_cursor(win)[1]
 		vim.bo[buf].modifiable = true
