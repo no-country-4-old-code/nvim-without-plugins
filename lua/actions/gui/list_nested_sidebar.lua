@@ -97,9 +97,9 @@ function M.open(opts)
 	-- the sidebar is narrow, so a deep path runs out of the window. the view
 	-- scrolls sideways, but it sticks: it only moves when the cursor needs it to.
 	--   going in   -- some row of the folder the cursor sits in is cut off on the
-	--                 right : scroll left (indent steps) until it reads, at most
-	--                 up to the indent of that folder, so no name is ever cut on
-	--                 the left
+	--                 right : scroll left (indent steps) until it reads, never
+	--                 further than one column short of the folder's own indent,
+	--                 so no name is ever cut on the left
 	--   going out  -- the third folder up the tree is cut off on the left :
 	--                 scroll back until it reads with one indent of air in front
 	-- Everything in between leaves the view where it is. The cursor has to sit on
@@ -137,7 +137,7 @@ function M.open(opts)
 		else -- entered a folder: only scroll if it does not read as it is
 			local missing = folder_width(line, depth) - width
 			local wanted = math.ceil(missing / INDENT) * INDENT
-			shift = math.min(math.max(shift, wanted), depth * INDENT)
+			shift = math.min(math.max(shift, wanted), math.max(depth * INDENT - 1, 0))
 		end
 		was_deep = depth
 
