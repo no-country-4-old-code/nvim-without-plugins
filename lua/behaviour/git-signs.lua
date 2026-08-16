@@ -112,6 +112,50 @@ local function update(buf)
 	if not ok then clear(buf) end
 end
 
+--- first line (0-based) of every block of consecutive signs
+local function hunk_starts(buf)
+	local starts, prev = {}, nil
+	for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {})) do
+		local row = mark[2]
+		if not prev or row > prev + 1 then starts[#starts + 1] = row end
+		prev = row
+	end
+	return starts
+end
+
+--- jump to the start of the next (dir > 0) / previous changed block, wrapping
+--- around at the end of the file
+function M.goto_hunk(dir)
+	local buf = vim.api.nvim_get_current_buf()
+	local starts = hunk_starts(buf)
+	if #starts == 0 then
+		return vim.notify("No changes in this file", vim.log.levels.INFO)
+	end
+
+	local cur = vim.api.nvim_win_get_cursor(0)[1] - 1
+	local target
+	if dir > 0 then
+		for _, row in ipairs(starts) do
+			if row > cur then
+				target = row
+				break
+			end
+		end
+		target = target or starts[1]
+	else
+		for i = #starts, 1, -1 do
+			if starts[i] < cur then
+				target = starts[i]
+				break
+			end
+		end
+		target = target or starts[#starts]
+	end
+
+	vim.cmd("normal! m'") -- leave a jumplist entry, so '' gets back
+	vim.api.nvim_win_set_cursor(0, { target + 1, 0 })
+end
+
 local function schedule_update(buf)
 	local timer = timers[buf]
 	if not timer then
