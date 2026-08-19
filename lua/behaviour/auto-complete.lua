@@ -18,6 +18,19 @@ local function completion_disabled(buf)
 	return vim.bo[buf].buftype ~= "" or vim.bo[buf].filetype == "netrw"
 end
 
+-- Is there a keyword in this buffer that "word" could grow into?
+--
+-- This is the same question i_CTRL-N asks, asked before we press it: firing
+-- CTRL-N when nothing can match makes Neovim re-enter completion on every
+-- further keystroke, which swallows the typed text and leaves the menu on
+-- screen. Pattern: "word" at a word boundary plus at least one more keyword
+-- character (a candidate that is only the word itself completes to nothing).
+local function has_match(word)
+	local case = vim.o.ignorecase and "\\c" or "\\C"
+	local pattern = case .. "\\<" .. word .. "\\k"
+	return vim.fn.search(pattern, "nw") ~= 0
+end
+
 function M.setup()
 	-- menu also for a single match, never insert/select on our own
 	vim.opt.completeopt = { "menu", "menuone", "noselect" }
@@ -42,9 +55,13 @@ function M.setup()
 			if completion_disabled(args.buf) then return end
 
 			local col = vim.api.nvim_win_get_cursor(0)[2]
-			local before = vim.api.nvim_get_current_line():sub(1, col)
-			local word = before:match("[%w_]*$")
+			local line = vim.api.nvim_get_current_line()
+			local word = line:sub(1, col):match("[%w_]*$")
 			if #word < MIN_CHARS then return end
+			-- editing inside a word: a completion would be inserted into its middle
+			if line:sub(col + 1, col + 1):match("[%w_]") then return end
+			-- nothing left to offer -> stay quiet and let the menu close
+			if not has_match(word) then return end
 
 			vim.api.nvim_feedkeys(vim.keycode("<C-n>"), "n", false)
 		end,
