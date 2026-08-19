@@ -10,6 +10,7 @@
 --                          focus stays in the list
 --   h        unfolded parent : fold it
 --            anything else   : jump to the parent node and fold it
+--            top level, nothing to fold : on_collapse_root
 --   <CR>     parent node : same as l
 --            leaf node   : same as l, but jump to that window and close the list
 --   <Esc>    close the sidebar
@@ -23,10 +24,16 @@ local M = {}
 
 local NS = vim.api.nvim_create_namespace("nested_sidebar")
 local INDENT = 2 -- columns per level -- also the sideways shift per level
+-- blank columns left of the rows -- drawn by 'statuscolumn', so the sideways
+-- scrolling never eats them. the top is padded with an empty winbar line, which
+-- costs no buffer line and leaves the row math alone.
+local PAD = 1
 
 --- Open the sidebar.
 --- @param opts table {
----   root      = any,                        -- top node, handed back untouched
+---   root      = any,                        -- top node, handed back untouched;
+---                                            --   it has no row of its own, the
+---                                            --   list starts at its children
 ---   children  = fun(node):any[],            -- child nodes of a parent node
 ---   is_parent = fun(node):boolean,          -- optional: can node be unfolded
 ---                                            --   (default: nothing is a parent)
@@ -42,14 +49,18 @@ local INDENT = 2 -- columns per level -- also the sideways shift per level
 ---   on_activate = fun(node):boolean,        -- optional: first say on l / <CR>;
 ---                                            --   return true to keep the widget
 ---                                            --   from folding / opening the node
+---   on_collapse_root = fun(),               -- optional: h on a top-level row with
+---                                            --   nothing left to fold
 ---   on_open   = fun(node, win),             -- optional: l on a leaf; win is the
 ---                                            --   window next to the sidebar
 ---   on_select = fun(node, win),             -- optional: <CR> on a leaf
 ---                                            --   (default: on_open)
 ---   reveal    = string[],                    -- optional: keys from the root down
----                                            --   to a node -- they start unfolded
----                                            --   and the cursor opens on the last
----   width     = integer,                    -- default 30
+---                                            --   to a node -- everything above it
+---                                            --   starts unfolded and the cursor
+---                                            --   opens on it (still folded)
+---   width     = integer,                    -- default 30 (room for the rows --
+---                                            --   the padding comes on top)
 ---   side      = "left" | "right",           -- default "left"
 ---   filetype  = string,                     -- default "nestedsidebar"; a second
 ---                                            --   open replaces the first one
@@ -81,8 +92,11 @@ function M.open(opts)
 	vim.cmd(left and "topleft vsplit" or "botright vsplit")
 	local win = vim.api.nvim_get_current_win()
 	vim.api.nvim_win_set_buf(win, buf)
-	vim.api.nvim_win_set_width(win, width)
+	vim.api.nvim_win_set_width(win, width + PAD)
 	vim.wo[win].winfixwidth = true
+	vim.wo[win].statuscolumn = string.rep(" ", PAD) -- padding left
+	vim.wo[win].winbar = " " -- padding top: one empty line above the list
+	vim.wo[win].winhighlight = "WinBar:Normal,WinBarNC:Normal"
 	vim.wo[win].number = false
 	vim.wo[win].relativenumber = false
 	vim.wo[win].signcolumn = "no"
@@ -91,7 +105,7 @@ function M.open(opts)
 	vim.wo[win].sidescrolloff = 0 -- so a shifted row ends flush with the window
 
 	-- tree state ----------------------------------------------------------
-	local expanded = { [key(opts.root)] = true } -- root starts unfolded
+	local expanded = {} -- the root has no row, its children are the top level
 	local rows = {} -- flat view of the tree: { node = ..., depth = ... }
 
 	-- the sidebar is narrow, so a deep path runs out of the window. the view
@@ -130,7 +144,7 @@ function M.open(opts)
 		local row = rows[line]
 		if not row then return end
 		local depth = row.depth
-		local width = vim.api.nvim_win_get_width(win)
+		local width = vim.api.nvim_win_get_width(win) - PAD
 
 		if depth < was_deep then -- left the folder: give the third parent back
 			shift = math.min(shift, math.max((depth - 4) * INDENT, 0))
@@ -157,7 +171,9 @@ function M.open(opts)
 				end
 			end
 		end
-		add(opts.root, 0)
+		for _, child in ipairs(children(opts.root) or {}) do
+			add(child, 0)
+		end
 
 		-- no fold markers: what a row is shows in its highlight, whether it is
 		-- unfolded shows in the rows below it
@@ -202,7 +218,7 @@ function M.open(opts)
 			vim.cmd(left and "rightbelow vsplit" or "leftabove vsplit")
 			target = vim.api.nvim_get_current_win()
 		end)
-		vim.api.nvim_win_set_width(win, width)
+		vim.api.nvim_win_set_width(win, width + PAD)
 		return target
 	end
 
@@ -229,7 +245,8 @@ function M.open(opts)
 	end
 
 	-- h: one level out. on an unfolded parent that is the node itself, anywhere
-	-- else the cursor jumps to the parent row and folds it away.
+	-- else the cursor jumps to the parent row and folds it away. at the top level
+	-- there is nothing left to fold -- the caller decides what "out" means there.
 	local function collapse()
 		local line = vim.api.nvim_win_get_cursor(win)[1]
 		local row = rows[line]
@@ -247,6 +264,7 @@ function M.open(opts)
 				return
 			end
 		end
+		if opts.on_collapse_root then opts.on_collapse_root() end
 	end
 
 	-- keymaps ---------------------------------------------------------------
@@ -260,12 +278,13 @@ function M.open(opts)
 	map("h", collapse)
 	map("<CR>", function() activate(true) end)
 
-	-- reveal: unfold the whole chain, then park the cursor on its last node (keys
-	-- of leaves are unfolded too -- harmless, is_parent decides what folds)
-	local wanted
-	for _, k in ipairs(opts.reveal or {}) do
-		expanded[k] = true
-		wanted = k
+	-- reveal: unfold everything above the last key, park the cursor on that key.
+	-- the revealed node itself stays folded -- walking out of a folder lands on
+	-- it closed, walking in is what unfolds it
+	local reveal = opts.reveal or {}
+	local wanted = reveal[#reveal]
+	for i = 1, #reveal - 1 do
+		expanded[reveal[i]] = true
 	end
 
 	render()
