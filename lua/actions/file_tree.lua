@@ -63,8 +63,8 @@ end
 -- file  = the current file: it and every folder above it are marked
 -- focus = the row the cursor opens on (the file, or the folder h walked out of)
 local function open_at(dir, file, focus)
-	-- tokyonight cyan, a step brighter than the blue of every other folder
-	vim.api.nvim_set_hl(0, "FileTreePath", { fg = "#7dcfff", bold = true })
+	-- tokyonight magenta, set off against the blue of every other folder
+	vim.api.nvim_set_hl(0, "FileTreePath", { fg = "#bb9af7", bold = true })
 
 	local marked = {}
 	for _, path in ipairs(chain(dir, file) or {}) do
