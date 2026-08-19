@@ -23,13 +23,6 @@ local function node(path, name)
 	return { path = path, name = name, dir = vim.fn.isdirectory(path) == 1 }
 end
 
--- the folder the tree starts in: the one holding file (":p:h" leaves a folder
--- itself alone), the cwd when no file is open
-local function root_dir(file)
-	if not file or file == "" then return vim.fn.getcwd() end
-	return vim.fn.fnamemodify(file, ":p:h")
-end
-
 -- folders first, then files, both case-insensitive by name
 local function entries(dir)
 	local items = {}
@@ -74,7 +67,7 @@ local function open_at(dir, file, focus)
 	sidebar.open({
 		reveal = chain(dir, focus),
 		filetype = "filetree",
-		root = node(dir, dir),
+		root = { path = dir }, -- no row of its own, only entries() reads it
 		key = function(n) return n.path end,
 		label = function(n) return n.name end,
 		highlight = function(n)
@@ -98,7 +91,10 @@ end
 
 function M.open()
 	local file = vim.api.nvim_buf_get_name(0) -- before the split steals focus
-	open_at(root_dir(file), file, file)
+	-- the tree starts in the folder holding the file (":p:h" leaves a folder
+	-- itself alone), in the cwd when nothing is open
+	local dir = file ~= "" and vim.fn.fnamemodify(file, ":p:h") or vim.fn.getcwd()
+	open_at(dir, file, file)
 end
 
 return M

@@ -46,9 +46,6 @@ local PAD = 1
 ---                                            --   (default tostring -- only fine
 ---                                            --   when children() returns the
 ---                                            --   very same nodes every time)
----   on_activate = fun(node):boolean,        -- optional: first say on l / <CR>;
----                                            --   return true to keep the widget
----                                            --   from folding / opening the node
 ---   on_collapse_root = fun(),               -- optional: h on a top-level row with
 ---                                            --   nothing left to fold
 ---   on_open   = fun(node, win),             -- optional: l on a leaf; win is the
@@ -227,7 +224,6 @@ function M.open(opts)
 	local function activate(jump)
 		local row = rows[vim.api.nvim_win_get_cursor(win)[1]]
 		if not row then return end
-		if opts.on_activate and opts.on_activate(row.node) then return end
 		if is_parent(row.node) then
 			local k = key(row.node)
 			expanded[k] = not expanded[k] or nil
