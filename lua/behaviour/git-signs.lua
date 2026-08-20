@@ -1,5 +1,8 @@
 -- Git change markers in the sign column (replaces gitsigns.nvim).
 --
+-- Runs git in the buffer file's own directory, so the signs always come from
+-- the repo that file belongs to -- not from the one nvim was started in.
+--
 -- Compares the buffer against its version in the git index -- or in
 -- $NVIM_GIT_REF_BASE when that names a branch / commit (see core.git-ref) -- and marks
 --   "+"  lines that were added      (green)

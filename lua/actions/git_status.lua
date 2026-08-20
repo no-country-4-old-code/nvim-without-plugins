@@ -7,18 +7,16 @@
 -- separate rows (the same blocks the gutter signs mark), while the preview uses
 -- the normal diff, which has the context lines that make it readable.
 --
+-- The repo is the one the current file lives in (core.git-ref.root), so calling
+-- this from a file outside the working directory shows *its* checkout's changes.
+--
 -- Compared against HEAD, or against $NVIM_GIT_REF_BASE when that names a
 -- branch / commit (see core.git-ref). Untracked files are listed as one entry.
 
 local overlay = require("actions.gui.list_simple_overlay")
+local git_ref = require("core.git-ref")
 
 local M = {}
-
-local function git_root()
-	local out = vim.fn.systemlist({ "git", "rev-parse", "--show-toplevel" })
-	if vim.v.shell_error ~= 0 then return nil end
-	return out[1]
-end
 
 -- "path:lnum:text" -> its pieces (same shape as rg --vimgrep, on purpose)
 local function parse(item)
@@ -138,16 +136,17 @@ local function collect(root, rev)
 end
 
 function M.open()
-	local root = git_root()
+	local root = git_ref.root()
 	if not root then
 		vim.notify("Not a git repo", vim.log.levels.WARN)
 		return
 	end
-	local rev = require("core.git-ref").get(root) or "HEAD"
+	local rev = git_ref.get(root) or "HEAD"
 	local items, sections = collect(root, rev)
 
 	overlay.open({
-		title = "Git changes vs " .. rev,
+		-- name the repo too: it is not necessarily the one of the cwd
+		title = string.format("Git changes vs %s  [%s]", rev, vim.fs.basename(root)),
 		start_on_list = true, -- focus starts on the list, not the filter box
 		items = items,
 		display = function(item)
