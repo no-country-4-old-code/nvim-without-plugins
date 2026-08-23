@@ -9,7 +9,9 @@
 -- A position is never added while the current point is already within 5 lines
 -- of it, so idling after a CTRL-O writes nothing and CTRL-I still works.
 -- Anything else (a jump / a settled line farther away) rewrites the history
--- from the current point on: the forward entries are dropped.
+-- from the current point on: the forward entries leave the history. They are
+-- kept in a second list though -- unreachable by CTRL-O / CTRL-I, but still
+-- places we have been, so M.entries() (the list overlay) shows them.
 --
 -- At startup the list is seeded from vim's jumplist (restored from shada), so
 -- a fresh session already knows the places of the previous one.
@@ -27,6 +29,8 @@ local TICK = 500 -- ms between checks
 local ns = vim.api.nvim_create_namespace("cursor-history")
 
 local hist, idx = {}, 0 -- oldest -> newest, idx = where we currently are
+local seen = {} -- entries overwritten by a new branch: gone from CTRL-O, kept for the list
+local seq = 0 -- order in which entries were recorded (both lists)
 local dwell = {} -- line the cursor is sitting on right now
 local jump_mark = { n = 0, file = "", lnum = 0 } -- last seen end of vim's jumplist
 local timer
@@ -82,22 +86,39 @@ local function prune()
 			if i <= idx then idx = idx - 1 end
 		end
 	end
+	for i = #seen, 1, -1 do
+		if not entry_pos(seen[i]) then table.remove(seen, i) end
+	end
 	if idx < 1 and #hist > 0 then idx = 1 end
 	if idx > #hist then idx = #hist end
 end
 
 local function make_entry(buf, lnum, col, file)
+	seq = seq + 1
 	if buf and vim.api.nvim_buf_is_loaded(buf) then
 		local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, lnum - 1, col, {})
-		if ok then return { buf = buf, id = id } end
+		if ok then return { buf = buf, id = id, seq = seq } end
 	end
-	return { file = file, lnum = lnum, col = col }
+	return { file = file, lnum = lnum, col = col, seq = seq }
 end
 
--- remember a position: everything after the current point is history no more
+-- dropped from the history by a new branch, but still a place we have been
+local function archive(entry)
+	if not entry_pos(entry) then return drop(entry) end
+	seen[#seen + 1] = entry
+	while #seen > MAX do
+		drop(seen[1])
+		table.remove(seen, 1)
+	end
+end
+
+-- remember a position: everything after the current point leaves the history
+-- (CTRL-I is gone) but is kept in `seen`, so the list overlay still shows it
 local function record(buf, lnum, col, file)
+	for i = idx + 1, #hist do
+		archive(hist[i])
+	end
 	for i = #hist, idx + 1, -1 do
-		drop(hist[i])
 		hist[i] = nil
 	end
 	hist[#hist + 1] = make_entry(buf, lnum, col, file)
@@ -186,6 +207,36 @@ local function tick()
 	if not near(hist[idx], file, lnum) then record(buf, lnum, col, file) end
 end
 
+-- every place of this session, newest first: the live history plus the entries
+-- a new branch overwrote. Positions within NEAR lines of an already listed one
+-- are left out, the newest of them wins. Columns are 0-based, as everywhere.
+function M.entries()
+	prune()
+	local all = {}
+	for _, entry in ipairs(hist) do all[#all + 1] = entry end
+	for _, entry in ipairs(seen) do all[#all + 1] = entry end
+	table.sort(all, function(a, b) return (a.seq or 0) > (b.seq or 0) end)
+
+	local out = {}
+	for _, entry in ipairs(all) do
+		local lnum, col = entry_pos(entry)
+		local file = lnum and entry_file(entry) or nil
+		if file and file ~= "" then
+			local known = false
+			for _, o in ipairs(out) do
+				if o.file == file and math.abs(o.lnum - lnum) <= NEAR then
+					known = true
+					break
+				end
+			end
+			if not known then
+				out[#out + 1] = { file = file, lnum = lnum, col = col, current = entry == hist[idx] }
+			end
+		end
+	end
+	return out
+end
+
 function M.back()
 	prune()
 	local buf, lnum, col, file = here()
@@ -209,7 +260,8 @@ local function seed()
 		local name = j.bufnr and vim.fn.bufname(j.bufnr) or ""
 		local file = name ~= "" and vim.fn.fnamemodify(name, ":p") or ""
 		if file ~= "" and vim.fn.filereadable(file) == 1 and not near(hist[#hist], file, j.lnum) then
-			hist[#hist + 1] = { file = file, lnum = j.lnum, col = j.col or 0 }
+			seq = seq + 1
+			hist[#hist + 1] = { file = file, lnum = j.lnum, col = j.col or 0, seq = seq }
 		end
 	end
 	idx = #hist

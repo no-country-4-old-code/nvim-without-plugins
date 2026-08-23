@@ -1,6 +1,11 @@
--- Command built on the list overlay: browse the jump history, newest first,
+-- Command built on the list overlay: browse the cursor history, newest first,
 -- with a live code preview of the highlighted entry. <CR> jumps to file:line:col,
 -- <Esc> closes. Same overlay as find_files / rip_grep / git_status.
+--
+-- The source is custom.cursor-history (seeded from vim's jumplist at startup),
+-- including the places a new branch dropped from CTRL-O / CTRL-I: those are no
+-- longer reachable by going back, but they are still places we have been.
+-- One entry per place -- positions a few lines apart are listed once.
 
 local overlay = require("actions.gui.list_simple_overlay")
 
@@ -13,19 +18,14 @@ local function parse(line)
 end
 
 function M.open()
-	local jumps = vim.fn.getjumplist()[1]
 	local items = {}
-	for i = #jumps, 1, -1 do -- newest jump first
-		local j = jumps[i]
-		local name = j.bufnr and vim.fn.bufname(j.bufnr) or ""
-		if name ~= "" then
-			items[#items + 1] = string.format("%s:%d:%d",
-				vim.fn.fnamemodify(name, ":~:."), j.lnum, (j.col or 0) + 1)
-		end
+	for _, e in ipairs(require("custom.cursor-history").entries()) do -- newest first
+		items[#items + 1] = string.format("%s:%d:%d",
+			vim.fn.fnamemodify(e.file, ":~:."), e.lnum, (e.col or 0) + 1)
 	end
 
 	overlay.open({
-		title = "Jumplist",
+		title = "Cursor history",
 		start_on_list = true, -- focus starts on the list, not the filter box
 		items = items,
 		display = function(line) -- list rows drop the col: "file:line"
