@@ -52,6 +52,10 @@ local PAD = 1
 ---                                            --   window next to the sidebar
 ---   on_select = fun(node, win),             -- optional: <CR> on a leaf
 ---                                            --   (default: on_open)
+---   keys      = { [string] = fun(node, close) },
+---                                            -- optional: extra buffer-local keys;
+---                                            --   node is the row under the cursor,
+---                                            --   close() shuts the sidebar
 ---   reveal    = string[],                    -- optional: keys from the root down
 ---                                            --   to a node -- everything above it
 ---                                            --   starts unfolded and the cursor
@@ -273,6 +277,14 @@ function M.open(opts)
 	map("l", function() activate(false) end)
 	map("h", collapse)
 	map("<CR>", function() activate(true) end)
+
+	-- caller keys: whatever the command wants to do with the row under the cursor
+	for lhs, fn in pairs(opts.keys or {}) do
+		map(lhs, function()
+			local row = rows[vim.api.nvim_win_get_cursor(win)[1]]
+			if row then fn(row.node, close) end
+		end)
+	end
 
 	-- reveal: unfold everything above the last key, park the cursor on that key.
 	-- the revealed node itself stays folded -- walking out of a folder lands on

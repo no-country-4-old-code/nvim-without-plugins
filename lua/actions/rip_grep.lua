@@ -34,7 +34,8 @@ local function typing_paused()
 end
 
 -- Search root: $NVIM_ROOT when set and non-empty, else nil -> rg searches the cwd
--- (the path nvim was started in), i.e. the unchanged default behaviour.
+-- (the path nvim was started in), i.e. the unchanged default behaviour. A dir
+-- handed to M.open (the file tree greps the folder under the cursor) wins.
 local function root()
 	local dir = vim.env.NVIM_ROOT
 	if dir and dir ~= "" then
@@ -48,13 +49,15 @@ local function parse(line)
 	return file, tonumber(lnum), tonumber(col), text
 end
 
-function M.open(query)
+--- @param query string|nil prefill the filter box
+--- @param dir string|nil search below this folder instead of $NVIM_ROOT / the cwd
+function M.open(query, dir)
 	if vim.fn.executable("rg") == 0 then
 		vim.notify("ripgrep (rg) not found", vim.log.levels.WARN)
 		return
 	end
 
-	local dir = root()
+	dir = dir or root()
 	local last = {} -- results of the last rg run; shown while the query is still growing
 
 	overlay.open({

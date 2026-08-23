@@ -8,6 +8,10 @@
 -- The path of the current file -- the file itself and every folder above it --
 -- is painted brighter than the rest, so the tree always shows where you are.
 --
+-- <leader>fg greps the folder under the cursor (its own folder when the cursor
+-- sits on a file): the tree closes and the rip-grep overlay opens rooted there,
+-- so the tree doubles as a way to pick a subfolder to search.
+--
 -- h on a top-level row has nothing left to fold: it re-opens the tree one
 -- directory further up, cursor on the folder just left, so the sidebar can walk
 -- out of the project. The marked path grows with it.
@@ -76,6 +80,15 @@ local function open_at(dir, file, focus)
 		end,
 		is_parent = function(n) return n.dir end,
 		children = function(n) return entries(n.path) end,
+		keys = {
+			-- rip grep below this row -- the folder itself, or the one holding
+			-- the file. the tree closes first: results open in a real window.
+			["<leader>fg"] = function(n, close)
+				local folder = n.dir and n.path or vim.fn.fnamemodify(n.path, ":h")
+				close()
+				require("actions.rip_grep").open(nil, folder)
+			end,
+		},
 		on_collapse_root = function() -- h at the top level: re-root one up
 			local parent = vim.fn.fnamemodify(dir, ":h")
 			if parent == dir then return end -- already at "/"
