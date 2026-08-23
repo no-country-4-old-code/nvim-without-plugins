@@ -18,14 +18,18 @@ function M.setup()
 	vim.api.nvim_create_autocmd("ColorScheme", { callback = set_line_number_colors })
 
 	-- Relative numbers only in normal mode
+	local copy_mode = require("custom.copy-mode")
+
 	vim.api.nvim_create_autocmd("InsertEnter", {
 		callback = function()
+			if copy_mode.active() then return end
 			vim.opt.relativenumber = false
 			vim.opt.number = true
 		end,
 	})
 	vim.api.nvim_create_autocmd("InsertLeave", {
 		callback = function()
+			if copy_mode.active() then return end
 			vim.opt.relativenumber = true
 			vim.opt.number = true
 		end,

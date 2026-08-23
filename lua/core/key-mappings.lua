@@ -109,6 +109,7 @@ function M.setup()
 
 	-- general --------------------------------------------------------------
 	vim.keymap.set("n", "<leader>h", show_keymaps, { desc = "Show keymaps" })
+	vim.keymap.set("n", "<leader>y", require("custom.copy-mode").toggle, { desc = "Copy mode : Clipboard y/p, no line numbers (<Esc> leaves)" })
 
 	-- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>ft", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })

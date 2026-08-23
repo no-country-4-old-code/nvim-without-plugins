@@ -31,7 +31,7 @@ function M.setup()
 	vim.api.nvim_create_autocmd({ "BufEnter", "FocusGained", "DirChanged" }, { callback = update_branch })
 	update_branch()
 	vim.o.laststatus = 2
-	vim.o.statusline = " %f %m%r%{v:lua.Statusline_branch()}%{v:lua.Statusline_diag()}%= %{&filetype} │ %l:%c │ %p%% "
+	vim.o.statusline = " %f %m%r%{v:lua.Statusline_copymode()}%{v:lua.Statusline_branch()}%{v:lua.Statusline_diag()}%= %{&filetype} │ %l:%c │ %p%% "
 end
 
 return M
