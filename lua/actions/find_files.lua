@@ -6,20 +6,45 @@ local overlay = require("actions.gui.list_simple_overlay")
 
 local M = {}
 
--- project files relative to the cwd (rg -> git -> find fallback, as in key-mappings)
-local function list_files()
-	if vim.fn.executable("rg") == 1 then
-		return vim.fn.systemlist({ "rg", "--files", "--hidden", "--glob", "!.git" })
-	elseif vim.fn.isdirectory(".git") == 1 then
-		return vim.fn.systemlist({ "git", "ls-files" })
+-- Search root: $NVIM_ROOT when set and non-empty, else nil -> search the cwd
+-- (the path nvim was started in), i.e. the unchanged default behaviour.
+local function root()
+	local dir = vim.env.NVIM_ROOT
+	if dir and dir ~= "" then
+		return vim.fn.expand(dir)
 	end
-	return vim.fn.systemlist({ "find", ".", "-type", "f", "-not", "-path", "*/.git/*" })
+end
+
+-- project files below `dir`, nil = the cwd (rg -> git -> find fallback).
+-- rg/find echo the root back into every path they print, so the rows stay
+-- openable from the cwd; git ls-files prints repo-relative paths, prefix them.
+local function list_files(dir)
+	if vim.fn.executable("rg") == 1 then
+		local cmd = { "rg", "--files", "--hidden", "--glob", "!.git" }
+		if dir then
+			table.insert(cmd, dir)
+		end
+		return vim.fn.systemlist(cmd)
+	elseif vim.fn.isdirectory((dir or ".") .. "/.git") == 1 then
+		local files = vim.fn.systemlist({ "git", "-C", dir or ".", "ls-files" })
+		if dir then
+			for i, f in ipairs(files) do
+				files[i] = dir .. "/" .. f
+			end
+		end
+		return files
+	end
+	return vim.fn.systemlist({ "find", dir or ".", "-type", "f", "-not", "-path", "*/.git/*" })
 end
 
 function M.open()
+	local dir = root()
+
 	overlay.open({
-		title = "Find files",
-		items = list_files,
+		title = dir and ("Find files  " .. vim.fn.fnamemodify(dir, ":~")) or "Find files",
+		items = function()
+			return list_files(dir)
+		end,
 		preview = function(path)
 			if vim.fn.filereadable(path) == 0 then
 				return { "-- not readable --" }
