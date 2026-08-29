@@ -4,6 +4,7 @@
 -- Same overlay as find_files / git_status.
 
 local overlay = require("actions.gui.list_simple_overlay")
+local search_env = require("actions.search_env")
 
 local M = {}
 
@@ -33,16 +34,6 @@ local function typing_paused()
 	return not interrupted
 end
 
--- Search root: $NVIM_ROOT when set and non-empty, else nil -> rg searches the cwd
--- (the path nvim was started in), i.e. the unchanged default behaviour. A dir
--- handed to M.open (the file tree greps the folder under the cursor) wins.
-local function root()
-	local dir = vim.env.NVIM_ROOT
-	if dir and dir ~= "" then
-		return vim.fn.expand(dir)
-	end
-end
-
 -- "file:line:col:text" (rg --vimgrep) -> its pieces
 local function parse(line)
 	local file, lnum, col, text = line:match("^(.-):(%d+):(%d+):(.*)$")
@@ -50,14 +41,14 @@ local function parse(line)
 end
 
 --- @param query string|nil prefill the filter box
---- @param dir string|nil search below this folder instead of $NVIM_ROOT / the cwd
+--- @param dir string|nil search below this folder instead of $NVIM_SEARCH_ROOT / the cwd
 function M.open(query, dir)
 	if vim.fn.executable("rg") == 0 then
 		vim.notify("ripgrep (rg) not found", vim.log.levels.WARN)
 		return
 	end
 
-	dir = dir or root()
+	dir = dir or search_env.root()
 	local last = {} -- results of the last rg run; shown while the query is still growing
 
 	overlay.open({
@@ -77,8 +68,11 @@ function M.open(query, dir)
 
             -- build command
 			local cmd = {
-				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git", "-e", query,
+				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git",
 			}
+			-- $NVIM_SEARCH_IGNORE_FOLDER: `--glob !name` skips those folders
+			vim.list_extend(cmd, search_env.rg_globs())
+			vim.list_extend(cmd, { "-e", query })
 			if dir then
 				-- adding "dir" to end of command to search there instead of cwd
 				table.insert(cmd, dir)

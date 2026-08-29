@@ -3,24 +3,19 @@
 -- The same overlay is meant to back "rg files", "git status", etc.
 
 local overlay = require("actions.gui.list_simple_overlay")
+local search_env = require("actions.search_env")
 
 local M = {}
-
--- Search root: $NVIM_ROOT when set and non-empty, else nil -> search the cwd
--- (the path nvim was started in), i.e. the unchanged default behaviour.
-local function root()
-	local dir = vim.env.NVIM_ROOT
-	if dir and dir ~= "" then
-		return vim.fn.expand(dir)
-	end
-end
 
 -- project files below `dir`, nil = the cwd (rg -> git -> find fallback).
 -- rg/find echo the root back into every path they print, so the rows stay
 -- openable from the cwd; git ls-files prints repo-relative paths, prefix them.
+-- $NVIM_SEARCH_IGNORE_FOLDER drops folders: rg knows the globs itself, the two
+-- fallbacks get filtered afterwards.
 local function list_files(dir)
 	if vim.fn.executable("rg") == 1 then
 		local cmd = { "rg", "--files", "--hidden", "--glob", "!.git" }
+		vim.list_extend(cmd, search_env.rg_globs())
 		if dir then
 			table.insert(cmd, dir)
 		end
@@ -32,13 +27,15 @@ local function list_files(dir)
 				files[i] = dir .. "/" .. f
 			end
 		end
-		return files
+		return search_env.filter(files)
 	end
-	return vim.fn.systemlist({ "find", dir or ".", "-type", "f", "-not", "-path", "*/.git/*" })
+	return search_env.filter(
+		vim.fn.systemlist({ "find", dir or ".", "-type", "f", "-not", "-path", "*/.git/*" })
+	)
 end
 
 function M.open()
-	local dir = root()
+	local dir = search_env.root()
 
 	overlay.open({
 		title = dir and ("Find files  " .. vim.fn.fnamemodify(dir, ":~")) or "Find files",

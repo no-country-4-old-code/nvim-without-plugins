@@ -65,8 +65,15 @@ export LESS_TERMCAP_ue=$'\e[0m'        # reset underline
 export GROFF_NO_SGR=1                  # for konsole and gnome-terminal
 
 # --- nvim
-# Search root for nvim's rip-grep action. Empty -> nvim searches the directory
-# it was started in. Set it to pin searches to a fixed project root.
-export NVIM_ROOT=
+# Search settings for nvim's find-files / rip-grep actions. They only apply
+# while nvim's cwd is inside NVIM_SEARCH_ROOT -- started anywhere else, nvim
+# searches its own cwd and hides nothing.
+#
+# Search root. Empty -> nvim searches the directory it was started in.
+# Set it to pin searches to a fixed project root.
+export NVIM_SEARCH_ROOT=
+# Folder names to skip while searching, separated by , : or space.
+# e.g. "build,node_modules,.venv"
+export NVIM_SEARCH_IGNORE_FOLDER=
 
 # --- other stuff like PATHs
