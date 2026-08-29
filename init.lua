@@ -45,6 +45,7 @@ require("custom.cursor-history").setup()
 require("custom.copy-mode").setup()
 require("custom.tabs").setup()
 require("custom.dep-graph").setup()
+require("custom.smart-substitute").setup()
 -- custom.cppcheck is required on demand from a project's .nvim.lua (see its header)
 
 -- plugin replacements
