@@ -162,6 +162,17 @@ function M.setup()
 		vim.lsp.buf.document_symbol()
 	end, { desc = "LSP : Symbol outline of current file (loclist)" })
 	vim.keymap.set("n", "<leader>cg", "<cmd>CDeps<CR>", { desc = "C/C++ : Folder dependency graph" })
+	-- t / T only exist in C/C++ buffers: elsewhere they stay vim's till-motion
+	vim.api.nvim_create_autocmd("FileType", {
+		pattern = { "c", "cpp" },
+		callback = function(args)
+			local fn = require("custom.goto-function")
+			vim.keymap.set("n", "t", function() fn.jump(1) end,
+				{ buffer = args.buf, desc = "C/C++ : Jump to next function definition" })
+			vim.keymap.set("n", "T", function() fn.jump(-1) end,
+				{ buffer = args.buf, desc = "C/C++ : Jump to previous function definition" })
+		end,
+	})
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })
 	vim.keymap.set("n", "<leader>cm", vim.lsp.buf.implementation, { desc = "LSP : Jump to implementation" })
