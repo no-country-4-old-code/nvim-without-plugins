@@ -30,9 +30,13 @@ local NS = vim.api.nvim_create_namespace("ListOverlayPreview") -- marks the focu
 ---                                                  --   in the list (defaults to the item
 ---                                                  --   itself); preview/on_select still get
 ---                                                  --   the raw item
----   preview       = fun(item):string[],string?,string?,integer?
+---   preview       = fun(item):string[],string?,string?,integer?,table?
 ---                                                  -- optional: lines[, filetype[, window
----                                                  --   title[, line to center on]]]
+---                                                  --   title[, line to center on[, extmarks
+---                                                  --   { { line = 1-based, opts = <extmark
+---                                                  --   opts> }, ... } -- when given they
+---                                                  --   replace the default one-line
+---                                                  --   highlight of the centered line]]]]
 ---   on_select     = fun(item)                      -- optional: <CR> action
 ---   start_on_list = boolean,                       -- default false; true starts
 ---                                                  --   focus on the list, not the filter
@@ -101,9 +105,9 @@ function M.open(opts)
 		if vim.api.nvim_win_is_valid(lwin) then
 			item = filtered[vim.api.nvim_win_get_cursor(lwin)[1]]
 		end
-		local lines, ft, title, focus = {}, nil, nil, nil
+		local lines, ft, title, focus, marks = {}, nil, nil, nil, nil
 		if item and opts.preview then
-			lines, ft, title, focus = opts.preview(item)
+			lines, ft, title, focus, marks = opts.preview(item)
 		end
 		vim.bo[pbuf].modifiable = true
 		vim.api.nvim_buf_set_lines(pbuf, 0, -1, false, lines or {})
@@ -114,14 +118,20 @@ function M.open(opts)
 			title = " " .. (title or "preview") .. " ", title_pos = "center",
 		})
 		vim.api.nvim_buf_clear_namespace(pbuf, NS, 0, -1)
+		local count = vim.api.nvim_buf_line_count(pbuf)
 		if focus then -- put the interesting line in the middle and mark it
-			local n = vim.api.nvim_buf_line_count(pbuf)
-			local ln = math.min(math.max(focus, 1), n)
+			local ln = math.min(math.max(focus, 1), count)
 			vim.api.nvim_win_set_cursor(pwin, { ln, 0 })
 			vim.api.nvim_win_call(pwin, function() vim.cmd("normal! zz") end)
-			vim.api.nvim_buf_set_extmark(pbuf, NS, ln - 1, 0, {
-				line_hl_group = "ListOverlayMatch",
-			})
+			if not marks then -- caller brings none: mark the centered line itself
+				vim.api.nvim_buf_set_extmark(pbuf, NS, ln - 1, 0, {
+					line_hl_group = "ListOverlayMatch",
+				})
+			end
+		end
+		for _, m in ipairs(marks or {}) do
+			local ln = math.min(math.max(m.line, 1), count)
+			pcall(vim.api.nvim_buf_set_extmark, pbuf, NS, ln - 1, 0, m.opts)
 		end
 	end
 
