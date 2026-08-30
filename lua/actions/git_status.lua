@@ -1,11 +1,11 @@
 -- Command built on the list overlay: browse every changed block in the repo
 -- like a rip-grep result -- one row per block, "path:line  first changed
--- line". The preview shows that file's diff with the block centered, <CR>
--- jumps to the block in the working tree, <Esc> closes.
+-- line". The preview shows the file itself (highlighted code, not a diff)
+-- centered on that block, <CR> jumps to the block in the working tree,
+-- <Esc> closes.
 --
 -- The list comes from `git diff --unified=0` so that neighbouring changes stay
--- separate rows (the same blocks the gutter signs mark), while the preview uses
--- the normal diff, which has the context lines that make it readable.
+-- separate rows -- the same blocks the gutter signs mark.
 --
 -- The repo is the one the current file lives in (core.git-ref.root), so calling
 -- this from a file outside the working directory shows *its* checkout's changes.
@@ -17,6 +17,8 @@ local overlay = require("actions.gui.list_simple_overlay")
 local git_ref = require("core.git-ref")
 
 local M = {}
+
+local CONTEXT = 200 -- lines read past the block, so the preview can center it
 
 -- "path:lnum:text" -> its pieces (same shape as rg --vimgrep, on purpose)
 local function parse(item)
@@ -54,34 +56,12 @@ local function first_change(diff, header, start)
 	return lnum or math.max(n, 1), vim.trim(text)
 end
 
--- row of the block that starts at new-side line `lnum` inside `hunk`, so that a
--- hunk holding several blocks centers on the one that was picked. Walks the
--- hunk body, counting the new-side lines ("+" and context; "-" lines are gone
--- from the new file and stay on the position they were removed from).
-local function block_row(lines, hunk, lnum)
-	local n = hunk.first
-	for row = hunk.row + 1, #lines do
-		local c = lines[row]:sub(1, 1)
-		if c == "+" or c == "-" then
-			if n >= lnum then return row end
-			if c == "+" then n = n + 1 end
-		elseif c == " " or c == "" then
-			if n > lnum then break end
-			n = n + 1
-		else
-			break -- next hunk ("@@"), "\ No newline...", end of the section
-		end
-	end
-	return hunk.row
-end
-
 --- cut a `git diff` into per-file sections, each with the rows of its hunk headers
 local function split_files(diff)
 	local order, cur = {}, nil
 	for i, line in ipairs(diff) do
 		if line:sub(1, 11) == "diff --git " then
 			cur = {
-				first = i,
 				-- "a/<path> b/<path>" -- renames name the new path second
 				path = line:match("^diff %-%-git a/.* b/(.*)$") or line:sub(12),
 				hunks = {},
@@ -93,31 +73,16 @@ local function split_files(diff)
 			cur.binary = true
 		end
 	end
-	for n, sec in ipairs(order) do
-		sec.last = order[n + 1] and order[n + 1].first - 1 or #diff
-	end
 	return order
 end
 
---- one item per changed block + the per-file diff shown next to it
---- @return string[] items, table sections
----   -- path -> { lines, hunks[i] = { row, first, last } } of the context diff
+--- one item per changed block: every block, even ones a context diff would
+--- merge into a single hunk
+--- @return string[] items
 local function collect(root, rev)
-	local diff = vim.fn.systemlist({ "git", "-C", root, "diff", rev })
 	local blocks = vim.fn.systemlist({ "git", "-C", root, "diff", "--unified=0", rev })
-	local items, sections = {}, {}
+	local items = {}
 
-	-- preview side: the readable diff, with each hunk's own line range
-	for _, sec in ipairs(split_files(diff)) do
-		sections[sec.path] = sec
-		sec.lines = vim.list_slice(diff, sec.first, sec.last)
-		for n, header in ipairs(sec.hunks) do
-			local first, last = hunk_range(diff[header])
-			sec.hunks[n] = { row = header - sec.first + 1, first = first, last = last }
-		end
-	end
-
-	-- list side: every block, even ones the context diff merges into one hunk
 	for _, sec in ipairs(split_files(blocks)) do
 		if #sec.hunks == 0 then -- binary file, rename without edits, mode change
 			items[#items + 1] = string.format("%s:1:%s", sec.path, sec.binary and "(binary)" or "(no line changes)")
@@ -132,7 +97,7 @@ local function collect(root, rev)
 		items[#items + 1] = string.format("%s:1:%s", path, "(untracked)")
 	end
 
-	return items, sections
+	return items
 end
 
 function M.open()
@@ -142,32 +107,31 @@ function M.open()
 		return
 	end
 	local rev = git_ref.get(root) or "HEAD"
-	local items, sections = collect(root, rev)
 
 	overlay.open({
 		-- name the repo too: it is not necessarily the one of the cwd
 		title = string.format("Git changes vs %s  [%s]", rev, vim.fs.basename(root)),
 		start_on_list = true, -- focus starts on the list, not the filter box
-		items = items,
+		items = collect(root, rev),
 		display = function(item)
 			local path, lnum, text = parse(item)
 			if not path then return item end
 			return string.format("%s:%d  %s", path, lnum, text)
 		end,
 		preview = function(item)
-			local path, lnum = parse(item)
-			local sec = path and sections[path]
-			if sec then -- the file's diff, centered on this block
-				local found
-				for _, hunk in ipairs(sec.hunks) do
-					if hunk.first <= lnum then found = hunk end
-					if hunk.last >= lnum then break end
-				end
-				return sec.lines, "diff", path, found and block_row(sec.lines, found, lnum)
+			local path, lnum, text = parse(item)
+			if not path then return { "-- no file --" } end
+			if text == "(binary)" then return { "-- binary file --" } end
+			local file = root .. "/" .. path
+			local ft = vim.filetype.match({ filename = path })
+			if vim.fn.filereadable(file) == 0 then
+				-- gone from the working tree: show the version it was deleted from
+				local old = vim.fn.systemlist({ "git", "-C", root, "show", rev .. ":" .. path })
+				if vim.v.shell_error ~= 0 then return { "-- not readable --" } end
+				return old, ft, path .. "  (deleted)", lnum
 			end
-			if not path then return { "-- no diff --" } end
-			return vim.fn.readfile(root .. "/" .. path, "", 500),
-				vim.filetype.match({ filename = path }), path
+			-- read past the block so it can be centered
+			return vim.fn.readfile(file, "", (lnum or 1) + CONTEXT), ft, path, lnum
 		end,
 		on_select = function(item)
 			local path, lnum = parse(item)
