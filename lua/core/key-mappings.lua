@@ -6,66 +6,26 @@
 local M = {}
 
 function M.setup()
-	local picker = require("core.picker")
 	local git = require("core.git")
 	local windows = require("core.windows")
 	local dbg = require("core.debug")
 
 	-- helper -------------------------------------------------------------
-	local function show_keymaps()
-		local items = {}
-		for _, mode in ipairs({ "n", "v", "x", "o", "i" }) do
-			for _, km in ipairs(vim.api.nvim_get_keymap(mode)) do
-				if km.desc and km.desc ~= "" then
-					items[#items + 1] = {
-						text = string.format("%s  %-14s %s", mode, km.lhs:gsub(" ", "<Space>"), km.desc),
-						lhs = km.lhs,
-						mode = mode,
-					}
-				end
-			end
-		end
-		table.sort(items, function(a, b) return a.text < b.text end)
-		picker.pick(items, { prompt = "Keymaps" })
-	end
-
-
-	-- paste over the word under the cursor without the deleted word landing in
-	-- any register, so the same text can be pasted over word after word
-	local function replace_word_with_register()
-		local text = vim.fn.getreg(vim.v.register):gsub("\n$", "")
-		if text == "" then return end
-		local line = vim.api.nvim_get_current_line()
-		local col = vim.api.nvim_win_get_cursor(0)[2]
-		if not vim.regex("^\\k"):match_str(line:sub(col + 1)) then return end -- not on a word
-		local marks = { vim.fn.getpos("'<"), vim.fn.getpos("'>") }
-		vim.cmd.normal({ "viw" .. vim.keycode("<Esc>"), bang = true })
-		local srow, scol = unpack(vim.api.nvim_buf_get_mark(0, "<"))
-		local erow, ecol = unpack(vim.api.nvim_buf_get_mark(0, ">"))
-		vim.fn.setpos("'<", marks[1])
-		vim.fn.setpos("'>", marks[2])
-		local last = vim.fn.strcharpart(vim.fn.getline(erow):sub(ecol + 1), 0, 1) -- may be multibyte
-		vim.api.nvim_buf_set_text(0, srow - 1, scol, erow - 1, ecol + #last, vim.split(text, "\n"))
-		vim.api.nvim_win_set_cursor(0, { srow, scol })
-	end
-
-
-
 	local lsp_border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
 	local function lsp_hover() vim.lsp.buf.hover({ border = lsp_border }) end
 	local function lsp_signature() vim.lsp.buf.signature_help({ border = lsp_border }) end
 
 	-- general --------------------------------------------------------------
-	vim.keymap.set("n", "<leader>h", show_keymaps, { desc = "Show keymaps" })
+	vim.keymap.set("n", "<leader>h", require("actions.show_keymaps").open, { desc = "Show keymaps" })
 	vim.keymap.set("n", "<leader>y", require("custom.copy-mode").toggle, { desc = "Copy mode : Clipboard y/p, no line numbers (<Esc> leaves)" })
-	vim.keymap.set("n", "<leader>r", replace_word_with_register, { desc = "Edit : Replace word under cursor with register (register kept)" })
+	vim.keymap.set("n", "<leader>r", require("actions.replace_word_with_register").run, { desc = "Edit : Replace word under cursor with register (register kept)" })
 
 	-- navigation -----------------------------------------------------------
-	vim.keymap.set("n", "<leader>ft", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })
-	vim.keymap.set("n", "<leader>fj", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (list overlay)" })
-	vim.keymap.set("n", "<leader>ff", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
-	vim.keymap.set("n", "<leader>fg", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
-	vim.keymap.set("n", "<leader>fG", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
+	vim.keymap.set("n", "<leader>l", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })
+	vim.keymap.set("n", "<leader>j", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (list overlay)" })
+	vim.keymap.set("n", "<leader>f", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
+	vim.keymap.set("n", "<leader>K", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
+	vim.keymap.set("n", "<leader>k", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
 	vim.keymap.set("n", "<leader>fr", "<cmd>registers<CR>", { desc = "Navigation : Browse copy & paste registers" })
 	local signs = require("behaviour.git-signs")
 	vim.keymap.set("n", "f", function() signs.goto_hunk(1) end, { desc = "Navigation : Next modified block (git)" })
