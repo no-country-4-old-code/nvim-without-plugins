@@ -38,6 +38,9 @@ vim.opt.path:append("**")
 vim.o.ignorecase = true
 vim.o.smartcase = true
 
+-- user settings from ~/.nvim-config.lua (search root, git ref base, own keymaps)
+local config = require("core.config")
+
 -- load custom settings (unchanged from the full config)
 require("custom.enforce-unix-eol").setup()
 require("custom.line-numbers").setup()
@@ -46,7 +49,7 @@ require("custom.copy-mode").setup()
 require("custom.tabs").setup()
 require("custom.dep-graph").setup()
 require("custom.smart-substitute").setup()
--- custom.cppcheck is required on demand from a project's .nvim.lua (see its header)
+-- custom.cppcheck is required on demand from ~/.nvim-config.lua (see its header)
 
 -- plugin replacements
 require("behaviour.auto-complete").setup()
@@ -55,6 +58,10 @@ require("core.lsp").setup()
 require("core.debug").setup()
 require("core.statusline").setup()
 require("core.key-mappings").setup()
+
+-- ~/.nvim-config.lua last: its setup() may override the keymaps set above.
+-- Hints once (and continues with the defaults) when the file does not exist.
+config.setup()
 
 -- No swap file please !
 vim.opt.swapfile = false

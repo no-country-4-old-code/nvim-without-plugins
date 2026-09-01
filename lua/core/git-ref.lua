@@ -5,13 +5,15 @@
 -- the process was started in -- opening a file from another checkout shows that
 -- checkout's changes.
 --
--- With $NVIM_GIT_REF_BASE set to a branch or a commit, behaviour.git-signs and
--- actions.git_status show the changes towards that ref instead of the changes
--- towards the index / HEAD:
+-- With `git.ref_base` in ~/.nvim-config.lua set to a branch or a commit,
+-- behaviour.git-signs and actions.git_status show the changes towards that ref
+-- instead of the changes towards the index / HEAD:
 --
---   NVIM_GIT_REF_BASE=origin/main nvim src/foo.c
+--   return { git = { ref_base = "origin/main" } }
 --
 -- Unset (or an unresolvable ref) keeps the default behaviour.
+
+local config = require("core.config")
 
 local M = {}
 
@@ -43,7 +45,7 @@ local warned = {}     -- ref -> already complained about
 --- the configured base ref, or nil when unset / not resolvable in `cwd`
 --- (one `git rev-parse` per directory, cached -- callers may run in a loop)
 function M.get(cwd)
-	local ref = vim.env.NVIM_GIT_REF_BASE
+	local ref = config.get().git.ref_base
 	if not ref or ref == "" then return nil end
 
 	cwd = cwd or vim.fn.getcwd()
@@ -54,7 +56,7 @@ function M.get(cwd)
 		if not resolvable[key] and not warned[ref] then
 			warned[ref] = true
 			vim.notify(
-				string.format("NVIM_GIT_REF_BASE: unknown ref '%s' -- comparing against the index instead", ref),
+				string.format("git.ref_base: unknown ref '%s' -- comparing against the index instead", ref),
 				vim.log.levels.WARN
 			)
 		end

@@ -4,7 +4,7 @@
 -- the repo that file belongs to -- not from the one nvim was started in.
 --
 -- Compares the buffer against its version in the git index -- or in
--- $NVIM_GIT_REF_BASE when that names a branch / commit (see core.git-ref) -- and marks
+-- `git.ref_base` when that names a branch / commit (see core.git-ref) -- and marks
 --   "+"  lines that were added      (green)
 --   "~"  lines that were modified   (green)
 --   "_"  lines were deleted here    (red, on the line above the gap -- the

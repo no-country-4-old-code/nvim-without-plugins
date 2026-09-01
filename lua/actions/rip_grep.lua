@@ -41,7 +41,7 @@ local function parse(line)
 end
 
 --- @param query string|nil prefill the filter box
---- @param dir string|nil search below this folder instead of $NVIM_SEARCH_ROOT / the cwd
+--- @param dir string|nil search below this folder instead of search.root / the cwd
 function M.open(query, dir)
 	if vim.fn.executable("rg") == 0 then
 		vim.notify("ripgrep (rg) not found", vim.log.levels.WARN)
@@ -70,7 +70,7 @@ function M.open(query, dir)
 			local cmd = {
 				"rg", "--vimgrep", "--smart-case", "--hidden", "--glob", "!.git",
 			}
-			-- $NVIM_SEARCH_IGNORE_FOLDER: `--glob !name` skips those folders
+			-- search.ignore_folders: `--glob !name` skips those folders
 			vim.list_extend(cmd, search_env.rg_globs())
 			vim.list_extend(cmd, { "-e", query })
 			if dir then

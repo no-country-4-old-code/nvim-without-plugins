@@ -10,7 +10,7 @@ local M = {}
 -- project files below `dir`, nil = the cwd (rg -> git -> find fallback).
 -- rg/find echo the root back into every path they print, so the rows stay
 -- openable from the cwd; git ls-files prints repo-relative paths, prefix them.
--- $NVIM_SEARCH_IGNORE_FOLDER drops folders: rg knows the globs itself, the two
+-- search.ignore_folders drops folders: rg knows the globs itself, the two
 -- fallbacks get filtered afterwards.
 local function list_files(dir)
 	if vim.fn.executable("rg") == 1 then

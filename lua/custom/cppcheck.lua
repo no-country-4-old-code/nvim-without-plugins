@@ -56,7 +56,7 @@ local function preview_in_main(qf_win, items)
 end
 
 -- On-save per-file checking is configured in lua/plugins/lint.lua.
--- Call this from a project's .nvim.lua to bind a full-project check to a key:
+-- Call this from ~/.nvim-config.lua (setup) to bind a full-project check to a key:
 --   local cppcheck = require("custom.cppcheck")
 --   vim.keymap.set("n", "<leader>5", function()
 --       cppcheck.check_project(vim.fn.getcwd() .. "/build/compile_commands.json")

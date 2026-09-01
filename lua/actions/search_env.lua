@@ -1,11 +1,14 @@
--- $NVIM_SEARCH_* environment for the search actions (find_files, rip_grep).
+-- Search settings for the search actions (find_files, rip_grep), read from
+-- ~/.nvim-config.lua (see core.config):
 --
---   NVIM_SEARCH_ROOT           pin searches to this folder instead of the cwd
---   NVIM_SEARCH_IGNORE_FOLDER  folder names to skip, separated by , : or space
+--   search.root            pin searches to this folder instead of the cwd
+--   search.ignore_folders  folder names to skip
 --
--- Both are only honoured when nvim's cwd lies inside $NVIM_SEARCH_ROOT -- an
--- nvim started outside that tree is a different project and keeps the plain
+-- Both are only honoured when nvim's cwd lies inside search.root -- an nvim
+-- started outside that tree is a different project and keeps the plain
 -- "search the cwd, hide nothing" default.
+
+local config = require("core.config")
 
 local M = {}
 
@@ -16,17 +19,17 @@ local function normalize(path)
 	return (full:gsub("/+$", ""))
 end
 
--- cwd is $NVIM_SEARCH_ROOT itself or below it?
+-- cwd is search.root itself or below it?
 local function cwd_inside(root)
 	local cwd = normalize(vim.fn.getcwd())
 	return cwd == root or cwd:sub(1, #root + 1) == root .. "/"
 end
 
---- Search root: $NVIM_SEARCH_ROOT when set, non-empty and containing the cwd,
---- else nil -> the caller searches the cwd (the path nvim was started in).
+--- Search root: search.root when set, non-empty and containing the cwd, else
+--- nil -> the caller searches the cwd (the path nvim was started in).
 --- @return string|nil
 function M.root()
-	local dir = vim.env.NVIM_SEARCH_ROOT
+	local dir = config.get().search.root
 	if not dir or dir == "" then
 		return nil
 	end
@@ -37,18 +40,14 @@ function M.root()
 	return dir
 end
 
---- Folder names from $NVIM_SEARCH_IGNORE_FOLDER, empty while the cwd is outside
---- $NVIM_SEARCH_ROOT (or no root is pinned at all).
+--- Folder names from search.ignore_folders, empty while the cwd is outside
+--- search.root (or no root is pinned at all).
 --- @return string[]
 function M.ignored_folders()
 	if not M.root() then
 		return {}
 	end
-	local folders = {}
-	for name in (vim.env.NVIM_SEARCH_IGNORE_FOLDER or ""):gmatch("[^,:%s]+") do
-		table.insert(folders, (name:gsub("/+$", "")))
-	end
-	return folders
+	return config.get().search.ignore_folders
 end
 
 --- The ignored folders as rg arguments: `--glob !name` skips a directory of

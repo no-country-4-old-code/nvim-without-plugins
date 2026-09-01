@@ -13,13 +13,35 @@ with **zero plugins** and **all keymaps preserved** (same bindings, same descrip
   - `gdb` — debugging via built-in **termdebug**
   - `cppcheck`, `graphviz` — for the unchanged `custom/cppcheck.lua` and `:CDeps`
 
-## Environment
+## Configuration — `~/.nvim-config.lua`
 
-- `NVIM_GIT_REF_BASE` — branch or commit to treat as the review base. When set,
-  the git signs in the gutter (`f` / `F` jump between changed blocks) and the
-  `gs` change list compare against that ref instead of against the index
-  / `HEAD`: `NVIM_GIT_REF_BASE=origin/main nvim src/foo.c`. An unknown ref falls
-  back to the default with a warning.
+All user settings live in one optional file, `~/.nvim-config.lua`. Copy
+[`example/.nvim-config.lua`](example/.nvim-config.lua) there and edit it; without
+it nvim prints a short hint at startup and runs with the defaults.
+
+```lua
+return {
+	search = {
+		root = "",                    -- pin <leader>ff / <leader>fg to this folder ("" = cwd)
+		ignore_folders = { "build" }, -- folder names to skip (list, or "a,b c")
+	},
+	git = {
+		ref_base = "",                -- review base for git signs and `gs` ("" = index/HEAD)
+	},
+	setup = function()                -- run last, so these keymaps win
+		vim.keymap.set("n", "<leader>1", "<cmd>!make<cr>", { desc = "make" })
+	end,
+}
+```
+
+- `search.root` / `search.ignore_folders` only apply while nvim's cwd is inside
+  `search.root` — started anywhere else, nvim searches its own cwd and hides nothing.
+- `git.ref_base` — branch or commit to treat as the review base. When set, the git
+  signs in the gutter (`f` / `F` jump between changed blocks) and the `gs` change
+  list compare against that ref instead of against the index / `HEAD`. An unknown
+  ref falls back to the default with a warning.
+- `setup` — anything that needs to *execute*: `vim.lsp.config` tweaks, own keymaps
+  (`<leader>1` … `<leader>9`), autocmds.
 
 ## Install
 

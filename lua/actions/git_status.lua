@@ -13,7 +13,7 @@
 -- The repo is the one the current file lives in (core.git-ref.root), so calling
 -- this from a file outside the working directory shows *its* checkout's changes.
 --
--- Compared against HEAD, or against $NVIM_GIT_REF_BASE when that names a
+-- Compared against HEAD, or against `git.ref_base` when that names a
 -- branch / commit (see core.git-ref). Untracked files are listed as one entry.
 
 local overlay = require("actions.gui.list_simple_overlay")
