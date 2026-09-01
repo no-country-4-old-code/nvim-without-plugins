@@ -29,18 +29,6 @@ function M.setup()
 		picker.pick(items, { prompt = "Keymaps" })
 	end
 
-	local function live_grep()
-		vim.ui.input({ prompt = "Grep: " }, function(q)
-			if not q or q == "" then return end
-			vim.cmd("silent grep! " .. vim.fn.escape(q, "%#|\""))
-			vim.cmd("copen")
-		end)
-	end
-
-	local function grep_word_under_cursor()
-		vim.cmd("silent grep! " .. vim.fn.escape(vim.fn.expand("<cWORD>"), "%#|\""))
-		vim.cmd("copen")
-	end
 
 	-- paste over the word under the cursor without the deleted word landing in
 	-- any register, so the same text can be pasted over word after word
@@ -61,66 +49,7 @@ function M.setup()
 		vim.api.nvim_win_set_cursor(0, { srow, scol })
 	end
 
-	local function open_file_tree() -- netrw replaces nvim-tree
-		for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-			if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "netrw" then
-				vim.api.nvim_win_close(w, true)
-				return
-			end
-		end
-		vim.cmd("Lexplore " .. vim.fn.fnameescape(vim.fn.expand("%:p:h")))
-	end
 
-	-- shared l / <CR> / <Esc> keys for list-like windows (netrw tree, quickfix):
-	-- run the window's native open action, then decide by focus: unchanged =
-	-- nothing opened elsewhere (e.g. folder toggled inline), moved = entry opened.
-	-- l keeps focus in the list, <CR> jumps to the entry and closes the list.
-	local function set_list_keys(buf, native_open)
-		local function open_entry(after_open)
-			local list_win = vim.api.nvim_get_current_win()
-			if not pcall(vim.cmd, native_open) then return end
-			if vim.api.nvim_get_current_win() ~= list_win and vim.api.nvim_win_is_valid(list_win) then
-				after_open(list_win)
-			end
-		end
-		local opts = { buffer = buf }
-		vim.keymap.set("n", "l", function()
-			open_entry(vim.api.nvim_set_current_win)
-		end, opts)
-		vim.keymap.set("n", "<CR>", function()
-			open_entry(function(w) vim.api.nvim_win_close(w, true) end)
-		end, opts)
-		vim.keymap.set("n", "<Esc>", function()
-			pcall(vim.api.nvim_win_close, 0, true)
-		end, opts)
-	end
-
-	vim.api.nvim_create_autocmd("FileType", {
-		pattern = "netrw",
-		callback = function(args)
-			set_list_keys(args.buf, [[execute "normal \<Plug>NetrwLocalBrowseCheck"]])
-		end,
-	})
-	vim.api.nvim_create_autocmd("FileType", {
-		pattern = "qf", -- grep results, diagnostics, references, ... (quickfix + loclist)
-		callback = function(args)
-			set_list_keys(args.buf, [[execute "normal! \<CR>"]])
-		end,
-	})
-
-	local function browse_buffers()
-		local items = {}
-		for _, b in ipairs(vim.fn.getbufinfo({ buflisted = 1 })) do
-			items[#items + 1] = {
-				text = string.format("%3d  %s%s", b.bufnr, vim.fn.fnamemodify(b.name, ":~:."), b.changed == 1 and " [+]" or ""),
-				bufnr = b.bufnr,
-			}
-		end
-		picker.pick(items, {
-			prompt = "Buffers",
-			on_select = function(it) vim.cmd("buffer " .. it.bufnr) end,
-		})
-	end
 
 	local lsp_border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
 	local function lsp_hover() vim.lsp.buf.hover({ border = lsp_border }) end
@@ -138,7 +67,6 @@ function M.setup()
 	vim.keymap.set("n", "<leader>fg", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
 	vim.keymap.set("n", "<leader>fG", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
 	vim.keymap.set("n", "<leader>fr", "<cmd>registers<CR>", { desc = "Navigation : Browse copy & paste registers" })
-	vim.keymap.set("n", "<leader>fb", browse_buffers, { desc = "Navigation : Browse open buffers" })
 	local signs = require("behaviour.git-signs")
 	vim.keymap.set("n", "f", function() signs.goto_hunk(1) end, { desc = "Navigation : Next modified block (git)" })
 	vim.keymap.set("n", "F", function() signs.goto_hunk(-1) end, { desc = "Navigation : Previous modified block (git)" })
@@ -185,27 +113,8 @@ function M.setup()
 	vim.keymap.set("n", "<leader>tx", "<cmd>tabclose<CR>", { desc = "Tabs : Close current tab (tabs)" })
 
 	-- git ----------------------------------------------------------------------
-	vim.keymap.set("n", "<leader>gs", require("actions.git_status").open, { desc = "Git : Browse every changed block (git status)" })
-	vim.keymap.set("n", "<leader>gc", function() git.commits() end, { desc = "Git : Browse commits" })
-	vim.keymap.set("n", "<leader>gb", require("actions.git_branch").open, { desc = "Git : Browse branches (list overlay)" })
+	vim.keymap.set("n", "<leader>g", require("actions.git_status").open, { desc = "Git : Browse every changed block (git status)" })
 
-	-- git history -------------------------------------------------------------
-	vim.keymap.set("n", "<leader>hr", git.repo_history, { desc = "Git-History: View repo history" })
-	vim.keymap.set("n", "<leader>hf", git.file_history, { desc = "Git-History: View file history " })
-	vim.keymap.set("n", "<leader>hd", git.diff_range, { desc = "Git-History : View diff between 2 commits" })
-
-	-- debug (termdebug) ---------------------------------------------------------
-	vim.keymap.set("n", "<leader>db", dbg.toggle_breakpoint, { desc = "Debug : Toggle breakpoint" })
-	vim.keymap.set("n", "<leader>dc", dbg.continue, { desc = "Debug : Continue / start" })
-	vim.keymap.set("n", "<leader>dn", dbg.step_over, { desc = "Debug : Step over" })
-	vim.keymap.set("n", "<leader>di", dbg.step_into, { desc = "Debug : Step into" })
-	vim.keymap.set("n", "<leader>do", dbg.step_out, { desc = "Debug : Step out" })
-	vim.keymap.set("n", "<leader>dx", dbg.terminate, { desc = "Debug : Terminate" })
-	vim.keymap.set("n", "<leader>dp", dbg.pause, { desc = "Debug : Pause" })
-	vim.keymap.set("n", "<leader>dr", dbg.restart, { desc = "Debug : Restart" })
-	vim.keymap.set("n", "<leader>du", dbg.toggle_ui, { desc = "Debug : Jump gdb <-> source window" })
-	vim.keymap.set("n", "<leader>de", dbg.eval, { desc = "Debug : Evaluate expression" })
-	vim.keymap.set("n", "<leader>dw", dbg.watch_word, { desc = "Debug : Add word under cursor to watch (gdb display)" })
 end
 
 return M
