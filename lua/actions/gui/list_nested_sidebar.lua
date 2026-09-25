@@ -276,6 +276,7 @@ function M.open(opts)
 	map("<Esc>", close)
 	map("l", function() activate(false) end)
 	map("h", collapse)
+	map("o", function() activate(true) end)
 	map("<CR>", function() activate(true) end)
 
 	-- caller keys: whatever the command wants to do with the row under the cursor

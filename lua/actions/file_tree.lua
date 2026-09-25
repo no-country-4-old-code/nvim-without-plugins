@@ -83,7 +83,7 @@ local function open_at(dir, file, focus)
 		keys = {
 			-- rip grep below this row -- the folder itself, or the one holding
 			-- the file. the tree closes first: results open in a real window.
-			["<leader>fg"] = function(n, close)
+			["<leader>k"] = function(n, close)
 				local folder = n.dir and n.path or vim.fn.fnamemodify(n.path, ":h")
 				close()
 				require("actions.rip_grep").open(nil, folder)
