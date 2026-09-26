@@ -3,8 +3,8 @@
 -- Runs git in the buffer file's own directory, so the signs always come from
 -- the repo that file belongs to -- not from the one nvim was started in.
 --
--- Compares the buffer against its version in the git index -- or in
--- the commit the branch started from off `git.ref_base` (see core.git-ref) -- and marks
+-- Compares the buffer against its version in the commit the branch started
+-- from -- or in the git index without one (see core.git-ref) -- and marks
 --   "+"  lines that were added      (green)
 --   "~"  lines that were modified   (green)
 --   "_"  lines were deleted here    (red, on the line above the gap -- the

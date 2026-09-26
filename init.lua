@@ -38,7 +38,7 @@ vim.opt.path:append("**")
 vim.o.ignorecase = true
 vim.o.smartcase = true
 
--- user settings from ~/.nvim-config.lua (search root, git ref base, own keymaps)
+-- user settings from ~/.nvim-config.lua (search root, own keymaps)
 local config = require("core.config")
 
 -- load custom settings (unchanged from the full config)

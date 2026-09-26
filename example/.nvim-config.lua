@@ -48,16 +48,6 @@ return {
 		ignore_folders = { "build", "node_modules", ".venv" },
 	},
 
-	git = {
-		-- Branch or commit to treat as the review base. When set, the git signs
-		-- in the gutter (f / F jump between changed blocks) and the `git` change
-		-- list compare against the commit the branch started from
-		-- (git merge-base <ref> HEAD) instead of against the index / HEAD.
-		-- "" -> compare against the index / HEAD. An unknown ref falls back to
-		-- that default with a warning.
-		ref_base = "",
-	},
-
 	-- Run at the end of init.lua, after all modules are set up 
     -- so keymaps win over the built-in ones. Put anything that needs to *execute*
 	-- in here: LSP tweaks, own keymaps, autocmds, ...

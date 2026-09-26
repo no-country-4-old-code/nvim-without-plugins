@@ -13,8 +13,8 @@
 -- The repo is the one the current file lives in (core.git-ref.root), so calling
 -- this from a file outside the working directory shows *its* checkout's changes.
 --
--- Compared against HEAD, or against the commit the branch started from off
--- `git.ref_base` (see core.git-ref). Untracked files are listed as one entry.
+-- Compared against the commit the branch started from, else HEAD
+-- (see core.git-ref). Untracked files are listed as one entry.
 
 local overlay = require("actions.gui.list_simple_overlay")
 local git_ref = require("core.git-ref")
@@ -176,9 +176,9 @@ function M.open()
 		vim.notify("Not a git repo", vim.log.levels.WARN)
 		return
 	end
-	local base, ref = git_ref.get(root)
+	local base, branch = git_ref.get(root)
 	local rev = base or "HEAD"
-	local label = base and string.format("%s (fork point %s)", ref, base:sub(1, 8)) or rev
+	local label = base and string.format("%s (%s)", base:sub(1, 8), branch) or rev
 	local items, blocks = collect(root, rev)
 	set_highlights()
 
