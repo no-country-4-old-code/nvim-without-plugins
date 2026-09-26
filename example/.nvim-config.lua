@@ -25,7 +25,7 @@ local clangd_mode = "farm"
 --                   to definition / references also reach files never opened.
 --            Both read index/compile_commands.json, so C and C++ each get their
 --            own -std (see link-farm.sh -f) and every .h its repo's language.
-local farm_index = false 
+local farm_index = true 
 -- cache dir
 local farm_dir = vim.fn.expand("~/.cache/c-farm")
 -- ===============
