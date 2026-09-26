@@ -63,6 +63,9 @@ function M.setup()
 		end
 	end
 
+	-- remember $/progress from startup on: indexing screen + statusline
+	require("actions.lsp_screen").setup()
+
 	vim.api.nvim_create_autocmd("LspAttach", {
 		callback = function(args)
 			local client = vim.lsp.get_client_by_id(args.data.client_id)

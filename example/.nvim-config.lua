@@ -70,16 +70,8 @@ return {
 			"--completion-style=detailed",
 		}
 
-		-- Indexing progress and time left show in the statusline. For errors:
-		-- clangd logs to stderr, which nvim writes to the LSP log.
-		vim.keymap.set("n", "<leader>7", function()
-			vim.cmd("tabedit +$ " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
-		end, { desc = "LSP log (clangd indexing)" })
-		vim.keymap.set("n", "<leader>8", function()
-			-- clangd error lines look like E[12:34:56.789] ...
-			local ok = pcall(vim.cmd, "vimgrep /E\\[\\d\\d:/j " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
-			if ok then vim.cmd("copen") else vim.notify("no clangd errors in the LSP log") end
-		end, { desc = "clangd errors -> quickfix" })
+		-- Indexing progress shows in the statusline; details, status and the LSP
+		-- log (clangd errors) via <leader>cI / cS / cL / cE (actions.lsp_screen).
 
 		if clangd_mode == "project" then
 			table.insert(clangd_cmd, "--compile-commands-dir=" .. build_dir)
