@@ -47,6 +47,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, { desc = "LSP : Incoming calls (who calls this)" })
 	vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, { desc = "LSP : Outgoing calls (what this calls)" })
 	vim.keymap.set("n", "<leader>ct", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
+	vim.keymap.set("n", "<leader>cd", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>cs", function() -- replaces Trouble symbols
 		vim.lsp.buf.document_symbol()
 	end, { desc = "LSP : Symbol outline of current file (loclist)" })
