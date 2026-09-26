@@ -23,6 +23,8 @@ local clangd_mode = "farm"
 -- indexing   false: LSP in open files + go to declaration into every header.
 --            true:  clangd also indexes every .c/.cpp in the background, so go
 --                   to definition / references also reach files never opened.
+--            Both read index/compile_commands.json, so C and C++ each get their
+--            own -std (see link-farm.sh -f) and every .h its repo's language.
 local farm_index = false 
 -- cache dir
 local farm_dir = vim.fn.expand("~/.cache/c-farm")
@@ -80,7 +82,11 @@ return {
 			vim.notify("clangd: no link farm at " .. farm_dir .. " -- run tools/c-link-farm/link-farm.sh build ROOT...",
 				vim.log.levels.WARN)
 		else
-			table.insert(clangd_cmd, "--compile-commands-dir=" .. farm_dir .. (farm_index and "/index" or ""))
+			table.insert(clangd_cmd, "--compile-commands-dir=" .. farm_dir .. "/index")
+			-- clangd indexes by default and rejects the flag twice: replace it
+			if not farm_index then
+				clangd_cmd[vim.fn.index(clangd_cmd, "--background-index") + 1] = "--background-index=false"
+			end
 			-- one clangd for all repos, instead of one per .git root
 			vim.lsp.config("clangd", { cmd = clangd_cmd, root_dir = farm_dir })
 

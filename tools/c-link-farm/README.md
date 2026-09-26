@@ -14,8 +14,7 @@ header into **one** folder and uses a single `-I` for that folder.
 ~/.cache/c-farm/
   include/foo.h   -> /work/libfoo/inc/foo.h      # every header
   src/foo.cpp     -> /work/libfoo/src/foo.cpp    # every .c/.cpp
-  compile_flags.txt                              # -I~/.cache/c-farm/include + your -f flags
-  index/compile_commands.json                    # every real source file with those flags
+  index/compile_commands.json                    # every real source file, -I~/.cache/c-farm/include + your -f flags
   farm.conf                                      # roots, -x and -f, for `update`
 ```
 
@@ -27,6 +26,7 @@ header into **one** folder and uses a single `-I` for that folder.
 link-farm.sh build /work/libs /work/apps                  # new farm over several folders
 link-farm.sh build -x test -x third_party /work           # skip more folder names
 link-farm.sh build -f -DUNIT_TEST -f -std=gnu11 /work     # flags for every file
+link-farm.sh build -f -std=gnu11 -f -std=c++20 /work      # a standard per language
 link-farm.sh add /work/tools                              # one more folder, same farm
 link-farm.sh update                                       # pick up new / deleted / renamed files
 link-farm.sh update /work/libs/foo                        # ... only below this folder (fast)
@@ -56,10 +56,13 @@ safely.
 
 The `~/.nvim-config.lua` setting `farm_index` chooses the level:
 
-| `farm_index` | clangd reads | You get |
-|---|---|---|
-| `false` | `compile_flags.txt` | Diagnostics, completion and hover in open files. *Go to declaration* reaches any header. |
-| `true`  | `index/compile_commands.json` | All of the above. clangd also indexes every `.c/.cpp` in the background, so *go to definition* and *references* reach files you never opened. The first run takes some time; the index is cached in `index/.cache`. |
+Both levels read `index/compile_commands.json`. The `~/.nvim-config.lua`
+setting `farm_index` only switches clangd's background index on or off:
+
+| `farm_index` | You get |
+|---|---|
+| `false` | Diagnostics, completion and hover in open files. *Go to declaration* reaches any header. |
+| `true`  | All of the above. clangd also indexes every `.c/.cpp` in the background, so *go to definition* and *references* reach files you never opened. The first run takes some time; the index is cached in `index/.cache`. |
 
 With either level, `<leader>6` switches between `foo.h` and `foo.c(pp)` by
 looking up the name in the farm.
@@ -68,8 +71,31 @@ looking up the name in the farm.
 
 - Includes that contain a path (`#include "sub/foo.h"`) do not resolve.
   The farm is flat. Add that repo's root with `-f -I/work/repo`.
-- Every file gets the same flags. If one lib needs special `-D`s, add them
-  with `-f`, or give that lib its own `.clangd` file.
+- Every file gets the same flags, except `-std=`: `-f -std=c++20` goes only
+  to C++ files and `-f -std=gnu11` only to C files. If one lib needs special
+  `-D`s, add them with `-f`, or give that lib its own `.clangd` file.
+
+## Mixed C and C++
+
+With C++20 repos next to C11 repos, pass one standard per language:
+
+```sh
+link-farm.sh build -f -std=gnu11 -f -std=c++20 ~/workspace/software
+```
+
+Headers have no entry of their own. clangd copies the flags, including the
+language, from a source file close to the header's real path (`-x c++-header`
+next to `.cpp` files, `-x c-header` next to `.c` files). So a `foo.h` in a C++
+repo is parsed as C++ and a `foo.h` in a C repo as C.
+
+clangd can guess wrong for a header-only C++ repo, a header with no source
+nearby, or a repo that mixes both languages. Put a `.clangd` file in that
+repo's root:
+
+```yaml
+CompileFlags:
+  Add: [-xc++, -std=c++20]
+```
 
 ## How to use on big repos without LSP
 
@@ -106,11 +132,12 @@ Check the `duplicate ...` lines the script prints:
   ~/.config/nvim/tools/c-link-farm/link-farm.sh build ~/workspace/software/libs ~/workspace/software/projects
   ```
 
-If the Makefiles pass important defines or a language standard, add them with
-`-f`. Skip folder names such as tests or vendored code with `-x`:
+If the Makefiles pass important defines or language standards, add them with
+`-f` (one `-std=` per language, see [Mixed C and C++](#mixed-c-and-c)). Skip
+folder names such as tests or vendored code with `-x`:
 
 ```sh
-~/.config/nvim/tools/c-link-farm/link-farm.sh build -f -DTARGET_LINUX -f -std=gnu11 -x third_party ~/workspace/software
+~/.config/nvim/tools/c-link-farm/link-farm.sh build -f -DTARGET_LINUX -f -std=gnu11 -f -std=c++20 -x third_party ~/workspace/software
 ```
 
 To keep the farm up to date, run `update` after pulling (it remembers the
@@ -200,8 +227,8 @@ when it gets big; nvim creates a new one.
 Start with `link-farm.sh check`. It changes nothing and reports, each with its
 fix: missing roots, missing clangd, links to deleted files, files not linked
 yet, headers shadowed by a same-named header, sources left out of the index
-because of a duplicate name, stale `compile_flags.txt` /
-`compile_commands.json`, and `#include "dir/foo.h"` lines that clangd cannot
+because of a duplicate name, a stale `compile_commands.json`, a leftover
+`compile_flags.txt` from older versions, and `#include "dir/foo.h"` lines that clangd cannot
 resolve. It exits with 1 on errors. It scans every root and greps every
 file, so it is slower than `update`.
 

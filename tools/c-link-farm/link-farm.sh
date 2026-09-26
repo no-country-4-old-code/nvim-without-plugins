@@ -5,9 +5,11 @@
 # Layout of FARM:
 #   include/                    one symlink per header      (foo.h -> /repo/x/inc/foo.h)
 #   src/                        one symlink per source file (foo.c -> /repo/x/src/foo.c)
-#   compile_flags.txt           -I FARM/include + the -f flags, for every file
-#   index/compile_commands.json every source file with those flags (clangd
-#                               background index; its cache index/.cache is kept)
+#   index/compile_commands.json every source file with -I FARM/include and the
+#                               -f flags (-std=c++.. / gnu++.. only for C++,
+#                               -std=c.. / gnu.. only for C); clangd derives
+#                               header flags from nearby sources; its background
+#                               index cache index/.cache is kept
 #   farm.conf                   roots / skipped folders / flags, so `update`
 #                               needs no arguments
 
@@ -51,7 +53,9 @@ Commands:
 Options:
   -o FARM  farm directory (default: ~/.cache/c-farm)
   -x DIR   folder name to skip everywhere, repeatable (.git and build always)
-  -f FLAG  compiler flag for every file, repeatable (-DFOO, -std=gnu11, -I/x)
+  -f FLAG  compiler flag for every file, repeatable (-DFOO, -I/x); a -std=
+           goes only to its language, so C and C++ can both have one:
+           -f -std=gnu11 -f -std=c++20
   -q       quiet: no summary line (update)
   -v       list every finding, not the first 5 (check)
   -h       this help
@@ -60,8 +64,8 @@ Examples:
   # one farm over libs and projects
   $me build ~/workspace/software/libs ~/workspace/software/projects
 
-  # with defines, a language standard, and without test / vendored code
-  $me build -f -DTARGET_LINUX -f -std=gnu11 -x test -x third_party \\
+  # with defines, a standard per language, and without test / vendored code
+  $me build -f -DTARGET_LINUX -f -std=gnu11 -f -std=c++20 -x test -x third_party \\
       ~/workspace/software/libs
 
   # later: one more folder, same farm
@@ -221,26 +225,31 @@ drop_dead() {
 	find "$1" -maxdepth 1 -xtype l -print -delete | wc -l
 }
 
-write_flags() {
-	printf '%s\n' "-I$farm/include" "${flags[@]}" > "$farm/compile_flags.txt"
-}
-
 # compile_commands.json: one entry per real source file (the link target, not
-# the link), so the entry matches the path nvim opens. Written to a temp file
-# and moved, so clangd never reads half a file.
+# the link), so the entry matches the path nvim opens. A -std= flag only goes
+# to its own language (clang rejects -std=gnu11 for C++ and vice versa).
+# Written to a temp file and moved, so clangd never reads half a file.
 write_commands() {
 	local out="$farm/index/compile_commands.json"
 	find "$farm/src" -maxdepth 1 -type l -printf '%l\n' | sort | awk '
 		function q(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return "\"" s "\"" }
-		BEGIN { while ((getline f < ARGV[1]) > 0) flags = flags ", " q(f); ARGV[1] = ""; print "[" }
+		BEGIN {
+			while ((getline f < ARGV[1]) > 0) {
+				if (f ~ /^-std=(c|gnu)\+\+/) cxx = cxx ", " q(f)
+				else if (f ~ /^-std=/) c = c ", " q(f)
+				else { c = c ", " q(f); cxx = cxx ", " q(f) }
+			}
+			ARGV[1] = ""
+			print "["
+		}
 		{
 			dir = $0; sub(/\/[^\/]*$/, "", dir)
-			cc = ($0 ~ /\.c$/) ? "cc" : "c++"
+			isc = $0 ~ /\.c$/
 			printf "%s{\"directory\": %s, \"file\": %s, \"arguments\": [%s%s, \"-c\", %s]}\n",
-				(NR > 1 ? "," : ""), q(dir), q($0), q(cc), flags, q($0)
+				(NR > 1 ? "," : ""), q(dir), q($0), q(isc ? "cc" : "c++"), (isc ? c : cxx), q($0)
 		}
 		END { print "]" }
-	' "$farm/compile_flags.txt" - > "$out.tmp"
+	' <(printf '%s\n' "-I$farm/include" "${flags[@]}") - > "$out.tmp"
 	mv "$out.tmp" "$out"
 }
 
@@ -255,7 +264,6 @@ sync() {
 	gone_s=$(drop_dead "$farm/src")
 	new_h=$(find_files "$HEADERS" "$@" | link_new "$farm/include" "$report")
 	new_s=$(find_files "$SOURCES" "$@" | link_new "$farm/src" "$report")
-	write_flags
 	if [ "$gone_s" -gt 0 ] || [ "$new_s" -gt 0 ] || [ "$cmd" != update ] ||
 		[ ! -f "$farm/index/compile_commands.json" ]; then
 		write_commands
@@ -273,7 +281,7 @@ if [ "$cmd" = status ]; then
 	echo "skip:    ${skip[*]}"
 	echo "flags:   ${flags[*]:-(none)}"
 	echo "links:   $(count include) headers, $(count src) sources"
-	echo "updated: $(date -r "$farm/compile_flags.txt" '+%F %T')"
+	echo "updated: $(date -r "$farm/index/compile_commands.json" '+%F %T')"
 	exit 0
 fi
 
@@ -385,11 +393,11 @@ if [ "$cmd" = check ]; then
 	fi
 
 	# generated files match farm.conf and the links
-	if [ "$(printf '%s\n' "-I$farm/include" "${flags[@]}")" = "$(cat "$farm/compile_flags.txt" 2> /dev/null)" ]; then
-		ok "compile_flags.txt matches farm.conf"
-	else
-		warn "compile_flags.txt missing or out of date -- run 'update'"
+	if [ "$farm/farm.conf" -nt "$farm/index/compile_commands.json" ]; then
+		warn "compile_commands.json is older than farm.conf -- run 'build'"
 	fi
+	[ -f "$farm/compile_flags.txt" ] &&
+		warn "$farm/compile_flags.txt is no longer used (it forces C on every .h) -- delete it"
 	entries=$(awk '/"file":/ { n++ } END { print n + 0 }' "$farm/index/compile_commands.json" 2> /dev/null || echo 0)
 	if [ "$entries" -eq "$(count src)" ]; then
 		ok "compile_commands.json has all $entries sources"
@@ -439,7 +447,7 @@ case $cmd in
 		if [ -n "$(ls -A "$farm" | grep -vx -e .lock -e index)" ] && [ ! -d "$farm/include" ]; then
 			die "$farm is not empty and not a farm -- refusing to overwrite it"
 		fi
-		rm -rf "$farm/include" "$farm/src" # index/.cache (clangd) survives
+		rm -rf "$farm/include" "$farm/src" "$farm/compile_flags.txt" # index/.cache (clangd) survives
 		roots=("${paths[@]}")
 		add_unique skip "${new_skip[@]}"
 		flags=("${new_flags[@]}")
