@@ -236,6 +236,11 @@ file, so it is slower than `update`.
   somewhere else.
 - **`'foo.h' file not found`**: the include has a path (`"sub/foo.h"`), or the
   header is in a skipped folder. Add that folder with `-f -I/path/to/folder`.
+- **`'cstdlib' file not found` in headers** (then many follow-up errors such
+  as `no type named ... in namespace`): clang picked a GCC version without
+  C++ headers. `ls /usr/lib/gcc/x86_64-linux-gnu/` shows the versions; install
+  the headers of the newest one, e.g. `sudo apt install libstdc++-12-dev`.
+  `--query-driver` fixes `.cpp` files only, not headers (clangd 14).
 - **Wrong or odd diagnostics in one lib**: it needs its own defines. Add them
   with `-f`, or put a `.clangd` file in that repo.
 - **New file not found by clangd**: run `link-farm.sh update` (or

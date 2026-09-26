@@ -110,7 +110,11 @@ while getopts "o:x:f:qvh" opt; do
 	case $opt in
 		o) farm=$OPTARG ;;
 		x) new_skip+=("$OPTARG") ;;
-		f) new_flags+=("$OPTARG") ;;
+		f)
+			# `-f std=c++20` would reach clang as a second input file
+			[ "${OPTARG#-}" != "$OPTARG" ] || die "-f $OPTARG: a flag starts with '-' (-f -$OPTARG?)"
+			new_flags+=("$OPTARG")
+			;;
 		q) quiet=1 ;;
 		v) verbose=1 ;;
 		h) usage; exit 0 ;;
