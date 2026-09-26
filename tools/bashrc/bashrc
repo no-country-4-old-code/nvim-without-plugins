@@ -48,6 +48,8 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
+# I personally set "r" to my working root. Saves me a lot of time.
+alias r='cd ~/repos'
 
 alias g='git status'
 alias gc='git commit'
