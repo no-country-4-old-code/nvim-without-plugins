@@ -1,55 +1,127 @@
--- Example ~/.nvim-config.lua -- the single file this config reads for user
--- settings. Copy it to your home directory and adjust:
---
---   cp example/.nvim-config.lua ~/.nvim-config.lua
---
--- It replaces the former NVIM_* environment variables and the project-local
--- .nvim.lua. Every key is optional; without the file nvim hints once at
--- startup and runs with the defaults.
+-- Custom nvim settings. Fields are optional 
+-- Copy it to your home directory ~/.nvim-config.lua
 
--- directory which contains compile_commands.json for LSP like clangd or cppcheck
+-- LSP
+-- (currently clangd ; python & rust support in config will follow)
+--
+-- clangd (C/C++ LSP): where do the compile flags come from? Pick one.
+--
+--   "project"  A normal build creates compile_commands.json in
+--              <cwd>/<build_dir> (CMake: -DCMAKE_EXPORT_COMPILE_COMMANDS=ON,
+--              or `bear -- make`). Use this when the build can do it.
+--              This needs "build_dir" to be set.
+--
+--   "farm"     Sometimes compile_commands.json can not be generated because the Makefile-structure
+--              is a monster. To cover this, I have a "exotic" approach:
+--              I create a symlink-farm (see README and script in tools folder).
+--              One clangd then serves every repo;
+
+local clangd_mode = "farm"
+
+-- ===============
+-- === "farm"-mode only. 
+-- indexing   false: LSP in open files + go to declaration into every header.
+--            true:  clangd also indexes every .c/.cpp in the background, so go
+--                   to definition / references also reach files never opened.
+local farm_index = false 
+-- cache dir
+local farm_dir = vim.fn.expand("~/.cache/c-farm")
+-- ===============
+
+-- ===============
+-- === "project" mode only. 
+-- Directory which contains compile_commands.json for LSP like clangd or cppcheck
 local build_dir = "build"
+-- ===============
+
 
 return {
 
-	-- Search settings for the find-files (<leader>ff) and rip-grep (<leader>fg)
-	-- actions. They only apply while nvim's cwd is inside `root` -- started
-	-- anywhere else, nvim searches its own cwd and hides nothing.
+	-- Search settings for the find-files && rip-grep
+	-- Only apply while nvim's cwd is inside `root` 
 	search = {
-		-- Pin searches to this folder. "" -> search the directory nvim was
-		-- started in.
+		-- As long as "root" is somewhere in parent path, every search starts from root.
+        -- default value : "" --> disabled
 		root = "",
-
-		-- Folder names to skip while searching. A list, or one string with
-		-- , : or space as separator: "build node_modules .venv"
 		ignore_folders = { "build", "node_modules", ".venv" },
 	},
 
 	git = {
 		-- Branch or commit to treat as the review base. When set, the git signs
-		-- in the gutter (f / F jump between changed blocks) and the `gs` change
+		-- in the gutter (f / F jump between changed blocks) and the `git` change
 		-- list compare against that ref instead of against the index / HEAD.
 		-- "" -> compare against the index / HEAD. An unknown ref falls back to
 		-- that default with a warning.
 		ref_base = "",
 	},
 
-	-- Run at the end of init.lua, after all modules are set up -- so keymaps
-	-- here win over the built-in ones. Put anything that needs to *execute*
+	-- Run at the end of init.lua, after all modules are set up 
+    -- so keymaps win over the built-in ones. Put anything that needs to *execute*
 	-- in here: LSP tweaks, own keymaps, autocmds, ...
 	setup = function()
-		vim.lsp.config("clangd", {
-			cmd = {
-				"clangd",
-				"--compile-commands-dir=" .. build_dir,
-				-- system has a partial GCC 12 install without libstdc++ headers; make
-				-- clangd take include paths from the real compiler instead of guessing
-				"--query-driver=/usr/bin/c++",
-				"--clang-tidy",
-				"--background-index",
-				"--completion-style=detailed",
-			},
-		})
+		local clangd_cmd = {
+			"clangd",
+			-- system has a partial GCC 12 install without libstdc++ headers; make
+			-- clangd take include paths from the real compiler instead of guessing
+			"--query-driver=/usr/bin/c++,/usr/bin/cc",
+			"--clang-tidy",
+			"--background-index",
+			"-j=4", -- threads for background indexing
+			"--completion-style=detailed",
+		}
+
+		-- Indexing progress and time left show in the statusline. For errors:
+		-- clangd logs to stderr, which nvim writes to the LSP log.
+		vim.keymap.set("n", "<leader>7", function()
+			vim.cmd("tabedit +$ " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+		end, { desc = "LSP log (clangd indexing)" })
+		vim.keymap.set("n", "<leader>8", function()
+			-- clangd error lines look like E[12:34:56.789] ...
+			local ok = pcall(vim.cmd, "vimgrep /E\\[\\d\\d:/j " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+			if ok then vim.cmd("copen") else vim.notify("no clangd errors in the LSP log") end
+		end, { desc = "clangd errors -> quickfix" })
+
+		if clangd_mode == "project" then
+			table.insert(clangd_cmd, "--compile-commands-dir=" .. build_dir)
+			vim.lsp.config("clangd", { cmd = clangd_cmd })
+		elseif vim.fn.isdirectory(farm_dir) == 0 then
+			vim.notify("clangd: no link farm at " .. farm_dir .. " -- run tools/c-link-farm/link-farm.sh",
+				vim.log.levels.WARN)
+		else
+			table.insert(clangd_cmd, "--compile-commands-dir=" .. farm_dir .. (farm_index and "/index" or ""))
+			-- one clangd for all repos, instead of one per .git root
+			vim.lsp.config("clangd", { cmd = clangd_cmd, root_dir = farm_dir })
+
+			-- go to declaration lands on the farm symlink; open the real file
+			-- instead, so the path, git signs and tabs show the actual repo
+			vim.api.nvim_create_autocmd("BufReadPost", {
+				pattern = farm_dir .. "/*",
+				callback = function(ev)
+					local real = vim.fn.resolve(ev.match)
+					if real == ev.match then return end
+					vim.schedule(function() -- after the LSP jump has placed the cursor
+						for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
+							local pos = vim.api.nvim_win_get_cursor(win)
+							vim.api.nvim_win_call(win, function() vim.cmd.edit(vim.fn.fnameescape(real)) end)
+							vim.api.nvim_win_set_cursor(win, pos)
+						end
+						if vim.fn.bufwinid(ev.buf) == -1 then pcall(vim.api.nvim_buf_delete, ev.buf, {}) end
+					end)
+				end,
+			})
+
+			-- foo.h <-> foo.c / foo.cpp via the farm (header and source live in
+			-- different folders, so clangd's own switch rarely finds them)
+			vim.keymap.set("n", "<leader>6", function()
+				local other = vim.fn.expand("%:e"):match("^h") and "/src/" or "/include/"
+				local hits = vim.fn.glob(farm_dir .. other .. vim.fn.expand("%:t:r") .. ".*", false, true)
+				if #hits == 0 then
+					vim.notify("no header/source for " .. vim.fn.expand("%:t"))
+					return
+				end
+				vim.cmd.edit(vim.fn.fnameescape(vim.fn.resolve(hits[1])))
+			end, { desc = "switch header/source" })
+		end
 
 		-- Use <leader>1 through <leader>9 for your own shortcuts.
 		-- Example: C project
@@ -80,10 +152,5 @@ return {
 		vim.keymap.set("n", "<leader>4", function()
 			print("Moin Moin")
 		end, { desc = "Moin Moin" })
-
-		local cppcheck = require("custom.cppcheck")
-		vim.keymap.set("n", "<leader>5", function()
-			cppcheck.check_project(vim.fn.getcwd() .. "/" .. build_dir .. "/compile_commands.json")
-		end, { desc = "cppcheck full project" })
 	end,
 }
