@@ -77,7 +77,7 @@ return {
 			table.insert(clangd_cmd, "--compile-commands-dir=" .. build_dir)
 			vim.lsp.config("clangd", { cmd = clangd_cmd })
 		elseif vim.fn.isdirectory(farm_dir) == 0 then
-			vim.notify("clangd: no link farm at " .. farm_dir .. " -- run tools/c-link-farm/link-farm.sh",
+			vim.notify("clangd: no link farm at " .. farm_dir .. " -- run tools/c-link-farm/link-farm.sh build ROOT...",
 				vim.log.levels.WARN)
 		else
 			table.insert(clangd_cmd, "--compile-commands-dir=" .. farm_dir .. (farm_index and "/index" or ""))

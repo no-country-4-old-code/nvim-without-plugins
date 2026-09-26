@@ -16,19 +16,41 @@ header into **one** folder and uses a single `-I` for that folder.
   src/foo.cpp     -> /work/libfoo/src/foo.cpp    # every .c/.cpp
   compile_flags.txt                              # -I~/.cache/c-farm/include + your -f flags
   index/compile_commands.json                    # every real source file with those flags
+  farm.conf                                      # roots, -x and -f, for `update`
 ```
 
 ## Usage
 
+`link-farm.sh -h` shows the full help with examples.
+
 ```sh
-tools/c-link-farm/link-farm.sh /work                         # all repos below /work
-tools/c-link-farm/link-farm.sh -x test -x third_party /work  # skip more folder names
-tools/c-link-farm/link-farm.sh -f -DUNIT_TEST -f -std=gnu11 /work/libs /work/apps
+link-farm.sh build /work/libs /work/apps                  # new farm over several folders
+link-farm.sh build -x test -x third_party /work           # skip more folder names
+link-farm.sh build -f -DUNIT_TEST -f -std=gnu11 /work     # flags for every file
+link-farm.sh add /work/tools                              # one more folder, same farm
+link-farm.sh update                                       # pick up new / deleted / renamed files
+link-farm.sh update /work/libs/foo                        # ... only below this folder (fast)
+link-farm.sh status                                       # roots, flags, link counts
+link-farm.sh check                                        # health report (-v: list every finding)
 ```
 
-Run it again whenever files are added, removed or renamed (a cron job or
-git hook is fine). The script reports duplicate names and keeps the first
-one it finds.
+`build` reports duplicate names and keeps the first one it finds.
+
+`update` is incremental: it deletes links whose file is gone and links only
+names that are new. Existing links stay as they are, and
+`compile_commands.json` is rewritten only when sources were added or removed,
+so clangd has nothing to reload after a no-op run. Most of the cost is walking
+the roots with `find`. `update PATH` walks only PATH, which takes well under
+a second, so it can run often, for example from a git hook in every repo:
+
+```sh
+# .git/hooks/post-checkout and .git/hooks/post-merge (chmod +x)
+#!/bin/sh
+~/.config/nvim/tools/c-link-farm/link-farm.sh update -q "$(git rev-parse --show-toplevel)"
+```
+
+Runs are serialized with `flock`, so a hook and a cron job can overlap
+safely.
 
 ## Two levels
 
@@ -70,7 +92,7 @@ Scan all of `software`, not only `libs`. Then jumps work both ways: from a
 project into a lib, and (with the index on) from a lib back to its users.
 
 ```sh
-~/.config/nvim/tools/c-link-farm/link-farm.sh ~/workspace/software
+~/.config/nvim/tools/c-link-farm/link-farm.sh build ~/workspace/software
 ```
 
 Check the `duplicate ...` lines the script prints:
@@ -81,21 +103,22 @@ Check the `duplicate ...` lines the script prints:
   are still found next to the file that includes them.
 
   ```sh
-  ~/.config/nvim/tools/c-link-farm/link-farm.sh ~/workspace/software/libs
+  ~/.config/nvim/tools/c-link-farm/link-farm.sh build ~/workspace/software/libs ~/workspace/software/projects
   ```
 
 If the Makefiles pass important defines or a language standard, add them with
 `-f`. Skip folder names such as tests or vendored code with `-x`:
 
 ```sh
-~/.config/nvim/tools/c-link-farm/link-farm.sh -f -DTARGET_LINUX -f -std=gnu11 -x third_party ~/workspace/software
+~/.config/nvim/tools/c-link-farm/link-farm.sh build -f -DTARGET_LINUX -f -std=gnu11 -x third_party ~/workspace/software
 ```
 
-To keep the farm up to date, re-run the same command after pulling, or from
-cron every night:
+To keep the farm up to date, run `update` after pulling (it remembers the
+roots and flags), use the git hook from [Usage](#usage), or run it from cron
+every night:
 
 ```
-0 6 * * * $HOME/.config/nvim/tools/c-link-farm/link-farm.sh $HOME/workspace/software >/dev/null 2>&1
+0 6 * * * $HOME/.config/nvim/tools/c-link-farm/link-farm.sh update -q
 ```
 
 ### 2. Configure nvim
@@ -149,14 +172,17 @@ every repo because its root is the farm.
 
 ### Watching the index
 
-- **Statusline**: shows `│ indexing 1234/20000 6% ~2h10m left` while clangd
-  indexes. The time left appears after 30 s and is based on the speed so far.
-  The text disappears when indexing is done.
-- **`<leader>7`**: opens the LSP log in a new tab, at the end. clangd writes
+- **Statusline**: shows `⟳ clangd indexing 6%` while clangd indexes. The
+  text disappears when indexing is done.
+- **`<leader>cI`**: every indexing / progress task, running and finished, with
+  elapsed time and a rough time-left estimate. Updates live.
+- **`<leader>cS`**: which servers run, their root and cmd, and whether the
+  current buffer has one attached.
+- **`<leader>cL`**: opens the LSP log in a new tab, at the end. clangd writes
   everything to it: `I[...]` lines are info, `E[...]` lines are errors. nvim
   tags all of them `[ERROR] ... "stderr"`, which does not mean anything failed.
   Run `:e` to reload the log.
-- **`<leader>8`**: puts every clangd error line (`E[...]`) into the quickfix
+- **`<leader>cE`**: puts every clangd error line (`E[...]`) into the quickfix
   list.
 - **From a shell** (without nvim): compare how many files are in the index with
   how many sources exist:
@@ -171,11 +197,22 @@ when it gets big; nvim creates a new one.
 
 ### Troubleshooting
 
+Start with `link-farm.sh check`. It changes nothing and reports, each with its
+fix: missing roots, missing clangd, links to deleted files, files not linked
+yet, headers shadowed by a same-named header, sources left out of the index
+because of a duplicate name, stale `compile_flags.txt` /
+`compile_commands.json`, and `#include "dir/foo.h"` lines that clangd cannot
+resolve. It exits with 1 on errors. It scans every root and greps every
+file, so it is slower than `update`.
+
 - **Warning `no link farm at ...`**: step 1 has not run, or `farm_dir` points
   somewhere else.
 - **`'foo.h' file not found`**: the include has a path (`"sub/foo.h"`), or the
   header is in a skipped folder. Add that folder with `-f -I/path/to/folder`.
 - **Wrong or odd diagnostics in one lib**: it needs its own defines. Add them
   with `-f`, or put a `.clangd` file in that repo.
-- **LSP log**: `<leader>7`, or `<leader>8` for errors only. `:checkhealth vim.lsp`
+- **New file not found by clangd**: run `link-farm.sh update` (or
+  `update <repo>`); a name that already exists in the farm is a duplicate and
+  stays linked to the first file.
+- **LSP log**: `<leader>cL`, or `<leader>cE` for errors only. `<leader>cS`
   shows whether clangd is attached.
