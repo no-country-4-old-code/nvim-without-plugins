@@ -51,7 +51,8 @@ return {
 	git = {
 		-- Branch or commit to treat as the review base. When set, the git signs
 		-- in the gutter (f / F jump between changed blocks) and the `git` change
-		-- list compare against that ref instead of against the index / HEAD.
+		-- list compare against the commit the branch started from
+		-- (git merge-base <ref> HEAD) instead of against the index / HEAD.
 		-- "" -> compare against the index / HEAD. An unknown ref falls back to
 		-- that default with a warning.
 		ref_base = "",

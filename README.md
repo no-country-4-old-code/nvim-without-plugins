@@ -38,8 +38,8 @@ return {
   `search.root` — started anywhere else, nvim searches its own cwd and hides nothing.
 - `git.ref_base` — branch or commit to treat as the review base. When set, the git
   signs in the gutter (`f` / `F` jump between changed blocks) and the `gs` change
-  list compare against that ref instead of against the index / `HEAD`. An unknown
-  ref falls back to the default with a warning.
+  list compare against the commit your branch started from (`git merge-base <ref> HEAD`)
+  instead of against the index / `HEAD`. An unknown ref falls back to the default with a warning.
 - `setup` — anything that needs to *execute*: `vim.lsp.config` tweaks, own keymaps
   (`<leader>1` … `<leader>9`), autocmds.
 

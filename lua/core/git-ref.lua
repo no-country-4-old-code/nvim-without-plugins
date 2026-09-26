@@ -6,12 +6,14 @@
 -- checkout's changes.
 --
 -- With `git.ref_base` in ~/.nvim-config.lua set to a branch or a commit,
--- behaviour.git-signs and actions.git_status show the changes towards that ref
--- instead of the changes towards the index / HEAD:
+-- behaviour.git-signs and actions.git_status show the changes since the commit
+-- the current branch started from (`git merge-base <ref> HEAD`) instead of the
+-- changes towards the index / HEAD -- commits that landed on the ref after
+-- branching off do not show up as changes:
 --
 --   return { git = { ref_base = "origin/main" } }
 --
--- Unset (or an unresolvable ref) keeps the default behaviour.
+-- Unset (or an unresolvable ref / no common history) keeps the default behaviour.
 
 local config = require("core.config")
 
@@ -39,29 +41,30 @@ function M.root()
 	return out[1]
 end
 
-local resolvable = {} -- cwd .. "\0" .. ref -> boolean
-local warned = {}     -- ref -> already complained about
+local warned = {} -- ref -> already complained about
 
---- the configured base ref, or nil when unset / not resolvable in `cwd`
---- (one `git rev-parse` per directory, cached -- callers may run in a loop)
+--- the commit the current branch started from -- the merge-base of HEAD and
+--- the configured base ref -- or nil when unset / not resolvable in `cwd`.
+--- Not cached: HEAD and the ref move (commit, checkout, fetch), and callers
+--- are debounced, so one `git merge-base` per call is cheap enough.
+--- @return string|nil commit hash, string|nil the configured ref
 function M.get(cwd)
 	local ref = config.get().git.ref_base
 	if not ref or ref == "" then return nil end
 
 	cwd = cwd or vim.fn.getcwd()
-	local key = cwd .. "\0" .. ref
-	if resolvable[key] == nil then
-		vim.fn.system({ "git", "-C", cwd, "rev-parse", "--verify", "--quiet", ref .. "^{commit}" })
-		resolvable[key] = vim.v.shell_error == 0
-		if not resolvable[key] and not warned[ref] then
+	local out = vim.fn.systemlist({ "git", "-C", cwd, "merge-base", ref, "HEAD" })
+	if vim.v.shell_error ~= 0 or not out[1] then
+		if not warned[ref] then
 			warned[ref] = true
 			vim.notify(
-				string.format("git.ref_base: unknown ref '%s' -- comparing against the index instead", ref),
+				string.format("git.ref_base: no common commit with '%s' -- comparing against the index instead", ref),
 				vim.log.levels.WARN
 			)
 		end
+		return nil
 	end
-	return resolvable[key] and ref or nil
+	return out[1], ref
 end
 
 return M
