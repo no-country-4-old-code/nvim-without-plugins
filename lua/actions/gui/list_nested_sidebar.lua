@@ -52,6 +52,9 @@ local PAD = 1
 ---                                            --   window next to the sidebar
 ---   on_select = fun(node, win),             -- optional: <CR> on a leaf
 ---                                            --   (default: on_open)
+---   on_move   = fun(node, win),             -- optional: the cursor landed on a
+---                                            --   row (j / k / fold): preview it
+---                                            --   in the window next to the sidebar
 ---   keys      = { [string] = fun(node, close) },
 ---                                            -- optional: extra buffer-local keys;
 ---                                            --   node is the row under the cursor,
@@ -196,7 +199,7 @@ function M.open(opts)
 				})
 			end
 		end
-		vim.api.nvim_win_set_cursor(win, { math.min(line, #lines), 0 })
+		vim.api.nvim_win_set_cursor(win, { math.max(math.min(line, #lines), 1), 0 })
 		fit_view()
 	end
 
@@ -271,7 +274,14 @@ function M.open(opts)
 	local function map(lhs, fn)
 		vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true })
 	end
-	vim.api.nvim_create_autocmd("CursorMoved", { buffer = buf, callback = fit_view })
+	vim.api.nvim_create_autocmd("CursorMoved", {
+		buffer = buf,
+		callback = function()
+			fit_view()
+			local row = rows[vim.api.nvim_win_get_cursor(win)[1]]
+			if opts.on_move and row then opts.on_move(row.node, open_win()) end
+		end,
+	})
 
 	map("<Esc>", close)
 	map("l", function() activate(false) end)

@@ -46,6 +46,7 @@ function M.setup()
 	-- incoming/outgoing calls land in the quickfix list natively (replaces calltree)
 	vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, { desc = "LSP : Incoming calls (who calls this)" })
 	vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, { desc = "LSP : Outgoing calls (what this calls)" })
+	vim.keymap.set("n", "<leader>ct", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
 	vim.keymap.set("n", "<leader>cs", function() -- replaces Trouble symbols
 		vim.lsp.buf.document_symbol()
 	end, { desc = "LSP : Symbol outline of current file (loclist)" })
