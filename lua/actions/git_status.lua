@@ -267,7 +267,7 @@ function M.open()
 
 	-- the sidebar is the current window now; name the repo too: it is not
 	-- necessarily the one of the cwd
-	vim.wo.winbar = string.format(" changes vs %s  [%s]", label, vim.fs.basename(root))
+	sidebar.set_title(string.format("Changes vs %s  [%s]", label, vim.fs.basename(root)))
 	vim.api.nvim_create_autocmd("BufWipeout", { buffer = 0, once = true, callback = unmark })
 end
 

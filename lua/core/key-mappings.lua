@@ -22,7 +22,7 @@ function M.setup()
 
 	-- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>l", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })
-	vim.keymap.set("n", "<leader>j", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (list overlay)" })
+	vim.keymap.set("n", "<leader>j", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (sidebar, j/k walks it)" })
 	vim.keymap.set("n", "<leader>f", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>K", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
 	vim.keymap.set("n", "<leader>k", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })

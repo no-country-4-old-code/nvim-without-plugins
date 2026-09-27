@@ -100,6 +100,7 @@ local function open_at(dir, file, focus)
 			end)
 		end,
 	})
+	sidebar.set_title("Files") -- the sidebar is the current window now
 end
 
 function M.open()

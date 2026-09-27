@@ -172,7 +172,7 @@ local function open_list(buf, fns, win)
 			open_list(other, other_fns, shown_win)
 		end },
 	})
-	vim.wo.winbar = " functions in " .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t")
+	sidebar.set_title("Functions in " .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t"))
 end
 
 function M.open()

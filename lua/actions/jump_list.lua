@@ -1,54 +1,48 @@
--- Command built on the list overlay: browse the cursor history, newest first,
--- with a live code preview of the highlighted entry. <CR> jumps to file:line:col,
--- <Esc> closes. Same overlay as find_files / rip_grep.
+-- Command built on the nested sidebar: the cursor history, newest first, one
+-- row per place ("file:line"). j / k walk the places and the window next to the
+-- sidebar follows. <CR> / o jump there and close the list, <Esc> closes it.
+-- Same sidebar as function_list, just flat (no nesting).
 --
 -- The source is custom.cursor-history of the current tab (seeded from vim's
 -- jumplist at startup). One entry per place -- positions a few lines apart are
 -- listed once.
 
-local overlay = require("actions.gui.list_simple_overlay")
+local sidebar = require("actions.gui.list_nested_sidebar")
 
 local M = {}
 
--- "file:line:col" -> its pieces
-local function parse(line)
-	local file, lnum, col = line:match("^(.-):(%d+):(%d+)$")
-	return file, tonumber(lnum), tonumber(col)
+-- show the place e in win: load its file there, cursor on it, centered
+local function show(e, win)
+	local buf = vim.fn.bufadd(e.file)
+	vim.fn.bufload(buf)
+	vim.bo[buf].buflisted = true
+	if vim.api.nvim_win_get_buf(win) ~= buf then vim.api.nvim_win_set_buf(win, buf) end
+	pcall(vim.api.nvim_win_set_cursor, win, { e.lnum, e.col or 0 })
+	vim.api.nvim_win_call(win, function() vim.cmd("normal! zvzz") end)
 end
 
 function M.open()
-	local items = {}
+	local entries = {}
 	for _, e in ipairs(require("custom.cursor-history").entries()) do -- newest first
-		items[#items + 1] = string.format("%s:%d:%d",
-			vim.fn.fnamemodify(e.file, ":~:."), e.lnum, (e.col or 0) + 1)
+		if vim.fn.filereadable(e.file) == 1 then entries[#entries + 1] = e end
+	end
+	if #entries == 0 then
+		vim.notify("Cursor history is empty", vim.log.levels.WARN)
+		return
 	end
 
-	overlay.open({
-		title = "Cursor history",
-		start_on_list = true, -- focus starts on the list, not the filter box
-		items = items,
-		display = function(line) -- list rows drop the col: "file:line"
-			local file, lnum = parse(line)
-			if not lnum then return line end
-			return string.format("%s:%d", file, lnum)
-		end,
-		preview = function(line)
-			local file, lnum = parse(line)
-			if not file or vim.fn.filereadable(file) == 0 then
-				return { "-- not readable --" }
-			end
-			-- title = file name; center the jump line (read past it for context)
-			local title = vim.fn.fnamemodify(file, ":~:.")
-			return vim.fn.readfile(file, "", (lnum or 1) + 200),
-				vim.filetype.match({ filename = file }), title, lnum
-		end,
-		on_select = function(line)
-			local file, lnum, col = parse(line)
-			if not file then return end
-			vim.cmd("edit " .. vim.fn.fnameescape(file))
-			pcall(vim.api.nvim_win_set_cursor, 0, { lnum or 1, (col or 1) - 1 })
-		end,
+	vim.cmd("normal! m'") -- <CR> jumps away: CTRL-O comes back here
+	sidebar.open({
+		filetype = "jumplist",
+		width = 35,
+		root = {}, -- no row of its own
+		children = function() return entries end, -- rows are leaves: only the root asks
+		key = function(e) return e.file .. ":" .. e.lnum end,
+		label = function(e) return vim.fn.fnamemodify(e.file, ":t") .. ":" .. e.lnum end,
+		on_move = show,
+		on_open = show,
 	})
+	sidebar.set_title("Cursor history")
 end
 
 return M

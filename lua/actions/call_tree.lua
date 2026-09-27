@@ -270,8 +270,8 @@ local function open_tree(root, mode)
 				win = vim.fn.win_getid(vim.fn.winnr("#"))
 			end
 			if win ~= 0 and win ~= vim.api.nvim_get_current_win() then show(n, win) end
-			vim.wo.winbar = (" %s %s%s"):format(mode == "down" and "calls in" or "callers of",
-				root.name, in_header and " [header]" or "")
+			sidebar.set_title(("%s %s%s"):format(mode == "down" and "Calls in" or "Callers of",
+				root.name, in_header and " [header]" or ""))
 		end },
 		-- h at the top: who calls it. not scheduled -- the server requests wait
 		-- with vim.wait, which would run a second queued switch in the middle
@@ -279,7 +279,7 @@ local function open_tree(root, mode)
 	})
 
 	-- the sidebar is the current window now
-	vim.wo.winbar = (" %s %s"):format(mode == "down" and "calls in" or "callers of", root.name)
+	sidebar.set_title(("%s %s"):format(mode == "down" and "Calls in" or "Callers of", root.name))
 	vim.api.nvim_create_autocmd("BufWipeout", { buffer = 0, once = true, callback = unmark })
 end
 

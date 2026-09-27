@@ -328,4 +328,14 @@ function M.open(opts)
 	end
 end
 
+--- Give the current window (the sidebar) a title: a bold header bar on the
+--- status line's colors, in place of the empty top padding.
+--- @param text string plain text -- no statusline items
+function M.set_title(text)
+	local bar = vim.api.nvim_get_hl(0, { name = "StatusLine", link = false })
+	vim.api.nvim_set_hl(0, "SidebarTitle", { fg = bar.fg, bg = bar.bg, bold = true })
+	vim.wo.winhighlight = "WinBar:SidebarTitle,WinBarNC:SidebarTitle"
+	vim.wo.winbar = " " .. text:gsub("%%", "%%%%")
+end
+
 return M
