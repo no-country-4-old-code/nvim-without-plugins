@@ -15,7 +15,6 @@ function M.setup()
 	-- general --------------------------------------------------------------
 	vim.keymap.set("n", "<leader>?", require("actions.show_keymaps").open, { desc = "Show keymaps" })
 	vim.keymap.set("n", "<leader>y", require("custom.copy-mode").toggle, { desc = "Copy mode : Clipboard y/p, no line numbers (<Esc> leaves)" })
-	vim.keymap.set("n", "<leader>r", require("actions.replace_word_with_register").run, { desc = "Edit : Replace word under cursor with register (register kept)" })
 
 	-- health -----------------------------------------------------------------
 	vim.keymap.set("n", "<leader>=", require("actions.health_screen").open, { desc = "Health : LSP status / indexing / log + checkhealth (new tab)" })
@@ -26,7 +25,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>f", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>K", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
 	vim.keymap.set("n", "<leader>k", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
-	vim.keymap.set("n", "<leader>fr", require("custom.yank-ring").open, { desc = "Navigation : Yank ring (last 10 yanks, 0-9 pastes, <Esc> closes)" })
+	vim.keymap.set("n", "<leader>r", require("custom.yank-ring").open, { desc = "Navigation : Yank ring (last 10 yanks, 0-9 pastes, <Esc> closes)" })
 	vim.keymap.set("n", "f", function() signs.goto_hunk(1) end, { desc = "Navigation : Next modified block (git)" })
 	vim.keymap.set("n", "F", function() signs.goto_hunk(-1) end, { desc = "Navigation : Previous modified block (git)" })
 	vim.keymap.set("n", "<leader>w", windows.pick_window_to_jump, { desc = "Navigation : Pick window to jump to" })
@@ -36,14 +35,14 @@ function M.setup()
 	vim.keymap.set({ "n", "o", "x" }, ".", "$", { desc = "Navigation : Set cursor to end of line" })
 
 	-- code navigation (lsp) --------------------------------------------------
-	vim.keymap.set("n", "<leader>cl", require("actions.diagnostic_list").open, { desc = "LSP : Browse diagnostics (sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>h", vim.lsp.buf.definition, { desc = "LSP : Go to definition" })
 	vim.keymap.set("n", "<leader>u", vim.lsp.buf.references, { desc = "LSP : Find usages / references" })
 	vim.keymap.set("n", "<leader>t", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
 	vim.keymap.set("n", "<leader>i", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
+	vim.keymap.set("n", "<leader>z", lsp_hover, { desc = "LSP : Hover docs of var" })
+	vim.keymap.set("n", "<leader>cl", require("actions.diagnostic_list").open, { desc = "LSP : Browse diagnostics (sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })
-	vim.keymap.set("n", "<leader>ck", lsp_hover, { desc = "LSP : Hover docs of var" })
 
 	-- tabs -------------------------------------------------------------------
 	vim.keymap.set("n", "<leader>tn", "<cmd>tabnew<CR>", { desc = "Tabs : New empty tab (tabs)" })
