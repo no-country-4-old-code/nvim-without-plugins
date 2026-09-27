@@ -46,13 +46,9 @@ function M.setup()
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })
 	vim.keymap.set("n", "<leader>ck", lsp_hover, { desc = "LSP : Hover docs of var" })
-	
-    -- I want one screen / health monitoring which offers different options like :CheckHealth and this LSP tingyis...
-    local lsp_screen = require("actions.lsp_screen")
-	vim.keymap.set("n", "<leader>cS", lsp_screen.status, { desc = "LSP : Status of running servers" })
-	vim.keymap.set("n", "<leader>cI", lsp_screen.indexing, { desc = "LSP : Indexing / progress (live)" })
-	vim.keymap.set("n", "<leader>cL", lsp_screen.log, { desc = "LSP : Open log (new tab)" })
-	vim.keymap.set("n", "<leader>cE", lsp_screen.errors, { desc = "LSP : Errors from log -> quickfix" })
+
+	-- health -----------------------------------------------------------------
+	vim.keymap.set("n", "<leader>=", require("actions.health_screen").open, { desc = "Health : LSP status / indexing / log + checkhealth (new tab)" })
 
 	-- tabs -------------------------------------------------------------------
 	vim.keymap.set("n", "<leader>tn", "<cmd>tabnew<CR>", { desc = "Tabs : New empty tab (tabs)" })

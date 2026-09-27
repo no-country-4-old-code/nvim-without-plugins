@@ -64,7 +64,7 @@ return {
 		}
 
 		-- Indexing progress shows in the statusline; details, status and the LSP
-		-- log (clangd errors) via <leader>cI / cS / cL / cE (actions.lsp_screen).
+		-- log (clangd errors) via <leader>= (actions.health_screen).
 
 		if clangd_mode == "project" then
 			table.insert(clangd_cmd, "--compile-commands-dir=" .. build_dir)

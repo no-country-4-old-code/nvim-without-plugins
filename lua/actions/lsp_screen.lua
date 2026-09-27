@@ -1,15 +1,13 @@
--- LSP screens: what is the language server doing right now?
+-- LSP data for the health screen (actions.health_screen, <leader>=):
 --
---   log()      the LSP log in a new tab, cursor at the end (servers like clangd
---              write their stderr there -- that is where indexing errors land)
---   errors()   only the error lines of that log (clangd: "E[12:34:56.789] ...")
---              in the quickfix list
---   status()   every running client: server version, root, cmd, attached
---              buffers, and whether the current buffer has a client at all
---   indexing() every progress task a server reported ($/progress -- clangd's
---              background index, rust-analyzer's cargo check, ...), running
---              and finished, with percent, elapsed time and a time-left guess.
---              Stays open and updates live; q / <Esc> closes.
+--   status_lines()   every running client: server version, root, cmd, attached
+--                    buffers, and whether buffer `buf` has a client at all
+--   indexing_lines() every progress task a server reported ($/progress --
+--                    clangd's background index, rust-analyzer's cargo check,
+--                    ...), running and finished, with percent, elapsed time and
+--                    a time-left guess
+--   error_lines()    only the error lines of the LSP log (clangd:
+--                    "E[12:34:56.789] ...") -- servers write their stderr there
 --
 -- Progress is only known from what the servers report, so setup() has to
 -- listen from startup on (core.lsp calls it). A client without any task never
@@ -21,7 +19,6 @@ local M = {}
 -- tasks[client_id][token] = { title, message, percentage, started, finished }
 -- (times from vim.uv.now() in ms; `clock` = wall clock at begin/end for display)
 local tasks = {}
-local view = { buf = nil, render = nil } -- the open indexing() window, if any
 
 local function fmt_duration(ms)
 	local s = math.floor(ms / 1000)
@@ -62,33 +59,6 @@ local function describe(t, now)
 		t.start_clock, fmt_duration(elapsed), left)
 end
 
--- scratch float, q / <Esc> close it
-local function float(lines, title)
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.bo[buf].bufhidden = "wipe"
-	local w = math.floor(vim.o.columns * 0.8)
-	local h = math.floor(vim.o.lines * 0.6)
-	vim.api.nvim_open_win(buf, true, {
-		relative = "editor", style = "minimal",
-		border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" },
-		title = " " .. title .. " ", title_pos = "center",
-		width = w, height = h,
-		row = math.floor((vim.o.lines - h) / 2), col = math.floor((vim.o.columns - w) / 2),
-	})
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-	vim.bo[buf].modifiable = false
-	for _, lhs in ipairs({ "q", "<Esc>" }) do
-		vim.keymap.set("n", lhs, "<cmd>close<CR>", { buffer = buf, nowait = true })
-	end
-	return buf
-end
-
-local function set_lines(buf, lines)
-	vim.bo[buf].modifiable = true
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-	vim.bo[buf].modifiable = false
-end
-
 local function on_progress(ev)
 	local id, params = ev.data.client_id, ev.data.params
 	local value = params and params.value
@@ -110,7 +80,6 @@ local function on_progress(ev)
 		t.end_clock = os.date("%H:%M:%S")
 	end
 	vim.cmd.redrawstatus()
-	if view.buf and vim.api.nvim_buf_is_valid(view.buf) then view.render() end
 end
 
 function M.setup()
@@ -131,21 +100,22 @@ function M.statusline()
 	return #parts > 0 and (" ⟳ " .. table.concat(parts, ", ")) or ""
 end
 
-function M.log()
-	vim.cmd("tabedit +$ " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
+function M.error_lines()
+	local out = {}
+	local ok, lines = pcall(vim.fn.readfile, vim.lsp.get_log_path())
+	for _, l in ipairs(ok and lines or {}) do
+		if l:match("^E%[%d%d:") then out[#out + 1] = l end
+	end
+	if #out == 0 then out[1] = "No LSP errors in the log." end
+	return out
 end
 
-function M.errors()
-	local ok = pcall(vim.cmd, "vimgrep /E\\[\\d\\d:/j " .. vim.fn.fnameescape(vim.lsp.get_log_path()))
-	if ok then vim.cmd("copen") else vim.notify("no LSP errors in the log") end
-end
-
-function M.status()
-	local cur = vim.api.nvim_get_current_buf()
+function M.status_lines(buf)
 	local lines = {}
 	local clients = vim.lsp.get_clients()
-	if #vim.lsp.get_clients({ bufnr = cur }) == 0 then
-		lines[#lines + 1] = string.format("No LSP attached to this buffer (filetype '%s').", vim.bo[cur].filetype)
+	if #vim.lsp.get_clients({ bufnr = buf }) == 0 then
+		lines[#lines + 1] = string.format("No LSP attached to buffer '%s' (filetype '%s').",
+			vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t"), vim.bo[buf].filetype)
 		lines[#lines + 1] = ""
 	end
 	if #clients == 0 then
@@ -161,51 +131,33 @@ function M.status()
 		end
 		vim.list_extend(lines, {
 			string.format("%s  (id %d)  %s%s", c.name, c.id, state,
-				c.attached_buffers[cur] and "  -- attached to this buffer" or ""),
+				c.attached_buffers[buf] and "  -- attached to that buffer" or ""),
 			"  version  " .. (info.version or info.name or "?"),
 			"  root     " .. (c.root_dir and vim.fn.fnamemodify(c.root_dir, ":~") or "-"),
 			"  cmd      " .. (type(c.config.cmd) == "table" and table.concat(c.config.cmd, " ") or "<function>"),
 			string.format("  buffers  %d attached", #bufs),
-			string.format("  tasks    %d running (details: indexing screen)", running),
+			string.format("  tasks    %d running (details: indexing)", running),
 			"",
 		})
 	end
 	vim.list_extend(lines, { "Log: " .. vim.fn.fnamemodify(vim.lsp.get_log_path(), ":~") })
-	float(lines, "LSP status")
+	return lines
 end
 
-function M.indexing()
-	local function lines()
-		local out, now = {}, vim.uv.now()
-		for _, c in ipairs(vim.lsp.get_clients()) do
-			out[#out + 1] = c.name
-			local list = sorted(tasks[c.id] or {})
-			if #list == 0 then
-				out[#out + 1] = "  no progress reported yet -- indexing not started"
-					.. " (or this server does not report it)"
-			end
-			for _, t in ipairs(list) do out[#out + 1] = describe(t, now) end
-			out[#out + 1] = ""
+function M.indexing_lines()
+	local out, now = {}, vim.uv.now()
+	for _, c in ipairs(vim.lsp.get_clients()) do
+		out[#out + 1] = c.name
+		local list = sorted(tasks[c.id] or {})
+		if #list == 0 then
+			out[#out + 1] = "  no progress reported yet -- indexing not started"
+				.. " (or this server does not report it)"
 		end
-		if #out == 0 then out[1] = "No LSP client running." end
-		return out
+		for _, t in ipairs(list) do out[#out + 1] = describe(t, now) end
+		out[#out + 1] = ""
 	end
-	view.buf = float(lines(), "LSP indexing / progress  (live, q closes)")
-	local buf = view.buf
-	view.render = function() set_lines(buf, lines()) end
-	-- elapsed / time-left keep ticking even while the server is quiet
-	local timer = vim.uv.new_timer()
-	timer:start(1000, 1000, vim.schedule_wrap(function()
-		if vim.api.nvim_buf_is_valid(buf) then view.render() end
-	end))
-	vim.api.nvim_create_autocmd("BufWipeout", {
-		buffer = buf, once = true,
-		callback = function()
-			timer:stop()
-			timer:close()
-			if view.buf == buf then view.buf = nil end
-		end,
-	})
+	if #out == 0 then out[1] = "No LSP client running." end
+	return out
 end
 
 return M
