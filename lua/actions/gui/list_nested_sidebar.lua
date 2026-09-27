@@ -93,11 +93,13 @@ function M.open(opts)
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.bo[buf].bufhidden = "wipe"
 	vim.bo[buf].filetype = filetype
+	vim.bo[buf].modifiable = false -- read-only view: only render() writes to it
 	vim.cmd(left and "topleft vsplit" or "botright vsplit")
 	local win = vim.api.nvim_get_current_win()
 	vim.api.nvim_win_set_buf(win, buf)
 	vim.api.nvim_win_set_width(win, width + PAD)
 	vim.wo[win].winfixwidth = true
+	vim.wo[win].winfixbuf = true -- no other buffer (:e, :cnext, gd, ...) takes the window over
 	vim.wo[win].statuscolumn = string.rep(" ", PAD) -- padding left
 	vim.wo[win].winbar = " " -- padding top: one empty line above the list
 	vim.wo[win].winhighlight = "WinBar:Normal,WinBarNC:Normal"
@@ -282,6 +284,13 @@ function M.open(opts)
 			if opts.on_move and row then opts.on_move(row.node, open_win()) end
 		end,
 	})
+
+	-- edit keys do nothing (instead of an E21 error on a read-only buffer).
+	-- the widget's and the caller's keys below override single ones of them
+	for _, lhs in ipairs({ "i", "I", "a", "A", "o", "O", "s", "S", "c", "C", "d", "D",
+		"x", "X", "r", "R", "p", "P", "J", "u", "U", "<C-r>", ".", "<", ">", "=", "~", "gu", "gU", "g~" }) do
+		vim.keymap.set({ "n", "x" }, lhs, "<Nop>", { buffer = buf, nowait = true })
+	end
 
 	map("<Esc>", close)
 	map("l", function() activate(false) end)
