@@ -10,7 +10,9 @@
 --
 -- j / k move and the window next to the sidebar follows: it shows the call
 -- site of the row (the line in the function one level up), the call marked.
--- <CR> / o jump there and close the tree, <Esc> closes it.
+-- <CR> / o jump there and close the tree, <Esc> closes it. u toggles what the
+-- window shows: the declaration of the row's function in its header instead
+-- of the call site (j / k keep showing headers), u again goes back.
 --
 -- Rows painted red cannot be unfolded: the function calls nothing (down), is
 -- called by nobody (up), or the server could not resolve it (a macro, a
@@ -80,6 +82,17 @@ local function resolve(buf, line, col)
 		return prepare(load(loc.uri or loc.targetUri), r.start.line, r.start.character)
 	end
 	return prepare(buf, line, col)
+end
+
+-- where item's function is declared (its prototype in a header), as a
+-- node-like { uri, range } -- nil when the server knows no separate one
+local function declaration(item)
+	local loc = request(load(item.uri), "textDocument/declaration",
+		position(load(item.uri), item.selectionRange.start.line, item.selectionRange.start.character))
+	loc = loc and (loc[1] or loc) -- Location | Location[] | LocationLink[]
+	local uri = loc and (loc.uri or loc.targetUri)
+	if not uri or uri == item.uri then return nil end
+	return { uri = uri, range = loc.targetSelectionRange or loc.range }
 end
 
 -- `name(` spots in the body of item (after its name, up to its end), skipping
@@ -173,6 +186,8 @@ local function open_tree(root, mode)
 	local kids, calls_any = {}, {} -- caches: render asks again on every fold
 	local marked -- buffer holding the call mark
 	local shown_win -- window the call site is shown in
+	local in_header = false -- u: show declarations instead of call sites
+	local decls = {} -- cache: key -> declaration node or false
 
 	local function children(n)
 		if not kids[n.key] then
@@ -199,10 +214,19 @@ local function open_tree(root, mode)
 		marked = nil
 	end
 
+	-- the declaration of the row's function, nil when it has none
+	local function decl_of(n)
+		if not n.item then return nil end
+		if decls[n.key] == nil then decls[n.key] = declaration(n.item) or false end
+		return decls[n.key] or nil
+	end
+
 	-- the call site in the window next to the tree, call marked, line centered
+	-- (in header mode the declaration, when there is one)
 	local function show(n, win)
 		shown_win = win
 		unmark()
+		n = in_header and decl_of(n) or n
 		vim.api.nvim_win_call(win, function()
 			local buf = vim.uri_to_bufnr(n.uri)
 			if vim.api.nvim_get_current_buf() ~= buf then
@@ -236,7 +260,19 @@ local function open_tree(root, mode)
 		is_parent = is_parent,
 		children = children,
 		on_move = show,
-		keys = { ["<CR>"] = jump, o = jump },
+		keys = { ["<CR>"] = jump, o = jump, u = function(n)
+			in_header = not in_header
+			if in_header and not decl_of(n) then
+				vim.notify("No header declaration of " .. n.name, vim.log.levels.WARN)
+			end
+			local win = shown_win
+			if not (win and vim.api.nvim_win_is_valid(win)) then
+				win = vim.fn.win_getid(vim.fn.winnr("#"))
+			end
+			if win ~= 0 and win ~= vim.api.nvim_get_current_win() then show(n, win) end
+			vim.wo.winbar = (" %s %s%s"):format(mode == "down" and "calls in" or "callers of",
+				root.name, in_header and " [header]" or "")
+		end },
 		-- h at the top: who calls it. not scheduled -- the server requests wait
 		-- with vim.wait, which would run a second queued switch in the middle
 		on_collapse_root = mode == "down" and function() open_tree(root, "up") end or nil,

@@ -3,7 +3,8 @@
 -- The cursor opens on the function it was in; j / k walk from function start
 -- to function start and the window next to the sidebar follows. Declarations
 -- are painted dimmer than definitions. <CR> / o jump there and close the list,
--- <Esc> closes it.
+-- <Esc> closes it. u switches to the list of the paired header / source file
+-- (foo.c <-> foo.h) and shows that file; u again switches back.
 --
 -- The functions come from the language server's document symbols (methods and
 -- constructors of C++ classes included); without a server the bundled
@@ -82,28 +83,47 @@ local function from_treesitter(buf)
 	return fns
 end
 
-function M.open()
-	vim.api.nvim_set_hl(0, "FunctionListDecl", { link = "Comment" })
+local HEADERS = { "h", "hpp", "hh", "hxx" }
+local SOURCES = { "c", "cpp", "cc", "cxx" }
 
-	local buf = vim.api.nvim_get_current_buf()
-	local fns = from_lsp(buf) or from_treesitter(buf)
-	if not fns or #fns == 0 then
-		vim.notify("No functions found (language server running?)", vim.log.levels.WARN)
-		return
+-- path of the header of a source file or the other way round, nil if none:
+-- clangd knows (switchSourceHeader), else a same-named file in the same folder
+local function paired_file(buf)
+	for _, client in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "clangd" })) do
+		local res = client:request_sync("textDocument/switchSourceHeader",
+			vim.lsp.util.make_text_document_params(buf), TIMEOUT, buf)
+		if res and type(res.result) == "string" then return vim.uri_to_fname(res.result) end
 	end
-	table.sort(fns, function(a, b) return a.line < b.line end)
+	local name = vim.api.nvim_buf_get_name(buf)
+	local ext = vim.fn.fnamemodify(name, ":e")
+	local stem = vim.fn.fnamemodify(name, ":r")
+	local others = vim.tbl_contains(HEADERS, ext) and SOURCES
+		or vim.tbl_contains(SOURCES, ext) and HEADERS or {}
+	for _, e in ipairs(others) do
+		if vim.fn.filereadable(stem .. "." .. e) == 1 then return stem .. "." .. e end
+	end
+end
 
+-- the functions of buf in file order, nil when there are none
+local function functions(buf)
+	local fns = from_lsp(buf) or from_treesitter(buf)
+	if not fns or #fns == 0 then return nil end
+	table.sort(fns, function(a, b) return a.line < b.line end)
+	return fns
+end
+
+-- the list of buf's functions, opened from win (showing buf)
+local function open_list(buf, fns, win)
 	-- open on the function the cursor is in, else the one above it: the last
 	-- one starting at or before the cursor line
-	local cur = vim.api.nvim_win_get_cursor(0)[1] - 1
+	local cur = vim.api.nvim_win_get_cursor(win)[1] - 1
 	local here
 	for _, fn in ipairs(fns) do
 		if fn.first <= cur then here = fn end
 	end
-	vim.cmd("normal! m'") -- <CR> jumps away: CTRL-O comes back here
 
 	local function key(fn) return fn.name .. ":" .. fn.line end
-	local shown_win -- window the function is shown in
+	local shown_win = win -- window the function is shown in
 
 	local function show(fn, win)
 		shown_win = win
@@ -130,9 +150,42 @@ function M.open()
 		reveal = here and { key(here) } or nil,
 		on_move = show,
 		on_open = show,
-		keys = { ["<CR>"] = jump, o = jump },
+		keys = { ["<CR>"] = jump, o = jump, u = function(_, close)
+			local name = vim.api.nvim_buf_get_name(buf)
+			local path = paired_file(buf)
+			if not path then
+				vim.notify("No header / source for " .. vim.fn.fnamemodify(name, ":t"), vim.log.levels.WARN)
+				return
+			end
+			local other = vim.fn.bufadd(path)
+			vim.fn.bufload(other)
+			vim.bo[other].buflisted = true
+			local other_fns = functions(other)
+			if not other_fns then
+				vim.notify("No functions in " .. vim.fn.fnamemodify(path, ":t"), vim.log.levels.WARN)
+				return
+			end
+			close()
+			if not vim.api.nvim_win_is_valid(shown_win) then return end
+			vim.api.nvim_set_current_win(shown_win)
+			vim.api.nvim_win_set_buf(shown_win, other)
+			open_list(other, other_fns, shown_win)
+		end },
 	})
 	vim.wo.winbar = " functions in " .. vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t")
+end
+
+function M.open()
+	vim.api.nvim_set_hl(0, "FunctionListDecl", { link = "Comment" })
+
+	local buf = vim.api.nvim_get_current_buf()
+	local fns = functions(buf)
+	if not fns then
+		vim.notify("No functions found (language server running?)", vim.log.levels.WARN)
+		return
+	end
+	vim.cmd("normal! m'") -- <CR> jumps away: CTRL-O comes back here
+	open_list(buf, fns, vim.api.nvim_get_current_win())
 end
 
 return M
