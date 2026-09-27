@@ -10,8 +10,10 @@ function M.setup()
 	-- Highlights
 	local function set_line_number_colors()
 		vim.api.nvim_set_hl(0, "LineNr", { fg = "#5eacd3" })
-		vim.api.nvim_set_hl(0, "CursorLineNr", { fg = "#ff9e64", bold = true })
-		vim.api.nvim_set_hl(0, "CursorLine", { bg = "#2a2e36" })
+		vim.api.nvim_set_hl(0, "CursorLineNr", { fg = "#24283b", bg = "#ff9e64", bold = true })
+		vim.api.nvim_set_hl(0, "CursorLine", { bg = "#1e3a44" })
+		vim.api.nvim_set_hl(0, "CursorLineSign", { bg = "#1e3a44" })
+		vim.api.nvim_set_hl(0, "CursorLineFold", { bg = "#1e3a44" })
 	end
 
 	set_line_number_colors()
