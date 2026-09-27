@@ -12,7 +12,8 @@ function M.setup()
 	})
 
 	local function set_lsp_float_highlights()
-		vim.api.nvim_set_hl(0, "FloatBorder", { fg = "#ff69b4", bold = true })
+		vim.api.nvim_set_hl(0, "FloatBorder", { fg = "#9ece6a" })
+		vim.api.nvim_set_hl(0, "FloatTitle", { fg = "#9ece6a", bold = true })
 		vim.api.nvim_set_hl(0, "NormalFloat", { bg = "NONE" })
 	end
 	set_lsp_float_highlights()

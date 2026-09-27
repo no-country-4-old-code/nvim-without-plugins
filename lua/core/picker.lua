@@ -50,9 +50,8 @@ function M.pick(items, opts)
 		row = math.floor((vim.o.lines - height) / 2) - 1,
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
-		border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" },
 		title = " " .. (opts.prompt or "Pick") .. " ",
-		title_pos = "center",
+		title_pos = "left",
 	})
 	vim.wo[win].cursorline = true
 	vim.wo[win].scrolloff = 2

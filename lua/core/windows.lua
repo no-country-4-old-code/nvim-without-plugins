@@ -33,7 +33,6 @@ function M.pick_window_to_jump()
 			width = 5,
 			height = 1,
 			style = "minimal",
-			border = "single",
 			focusable = false,
 			zindex = 300,
 		})

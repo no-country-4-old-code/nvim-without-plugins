@@ -15,11 +15,6 @@ function M.setup()
 	local history = require("custom.cursor-history") 
 	local signs = require("behaviour.git-signs")
 
-	-- helper -------------------------------------------------------------
-	local lsp_border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
-	local function lsp_hover() vim.lsp.buf.hover({ border = lsp_border }) end
-	local function lsp_signature() vim.lsp.buf.signature_help({ border = lsp_border }) end
-
 	-- help & health -----------------------------------------------------------------
 	vim.keymap.set("n", "<leader>?", require("actions.show_keymaps").open, { desc = "Show keymaps" })
 	vim.keymap.set("n", "<leader>=", require("actions.health_screen").open, { desc = "Health : LSP status / indexing / log + checkhealth (new tab)" })
@@ -52,7 +47,7 @@ function M.setup()
 	vim.keymap.set("n", "<leader>u", vim.lsp.buf.references, { desc = "LSP : Find usages / references" })
 	vim.keymap.set("n", "<leader>t", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
 	vim.keymap.set("n", "<leader>i", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
-	vim.keymap.set("n", "<leader>z", lsp_hover, { desc = "LSP : Hover docs of var" })
+	vim.keymap.set("n", "<leader>z", vim.lsp.buf.hover, { desc = "LSP : Hover docs of var" })
 	vim.keymap.set("n", "<leader>cl", require("actions.diagnostic_list").open, { desc = "LSP : Browse diagnostics (sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })

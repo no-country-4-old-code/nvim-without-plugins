@@ -63,13 +63,11 @@ function M.open()
 		height = SIZE,
 		row = 0,
 		col = vim.o.columns - width - 2, -- border takes the last 2 columns
-		border = "rounded",
 		title = " Yanks ",
 		title_pos = "left",
 		style = "minimal",
 	})
 	vim.wo[win].cursorline = false
-	vim.wo[win].winhighlight = "FloatBorder:YankRingBorder,FloatTitle:YankRingBorder"
 
 	local function close()
 		if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
@@ -90,7 +88,6 @@ end
 
 function M.setup()
 	vim.api.nvim_set_hl(0, "YankRingLast", { default = true, fg = "#9ece6a", bold = true })
-	vim.api.nvim_set_hl(0, "YankRingBorder", { default = true, fg = "#9ece6a" })
 	vim.api.nvim_create_autocmd("TextYankPost", {
 		group = vim.api.nvim_create_augroup("yank-ring", { clear = true }),
 		callback = function()

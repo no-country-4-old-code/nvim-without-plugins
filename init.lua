@@ -29,6 +29,10 @@ vim.api.nvim_create_autocmd("FileType", {
 	end,
 })
 
+-- one look for every floating window (pickers, overlays, LSP hover, yank ring,
+-- ...): rounded border, green via FloatBorder / FloatTitle (core/lsp.lua)
+vim.o.winborder = "rounded"
+
 -- fuzzy cmdline completion as a bonus (:find, :b, ...)
 vim.opt.wildoptions:append("fuzzy")
 vim.opt.path:append("**")

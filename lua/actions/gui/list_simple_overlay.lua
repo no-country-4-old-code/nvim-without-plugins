@@ -15,7 +15,6 @@
 
 local M = {}
 
-local BORDER = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
 local SCROLL = { down = vim.keycode("<C-e>"), up = vim.keycode("<C-y>") }
 local NS = vim.api.nvim_create_namespace("ListOverlayPreview") -- marks the focus line
 
@@ -61,8 +60,6 @@ function M.open(opts)
 	local list_w = math.floor(ui_w / 2)
 	local prev_w = ui_w - list_w - 3 -- gap for the two borders between panes
 
-	-- tokyonight blue border for every pane of the overlay
-	vim.api.nvim_set_hl(0, "ListOverlayBorder", { fg = "#7aa2f7" })
 	-- highlight for the matched line in the preview (theme-aware)
 	vim.api.nvim_set_hl(0, "ListOverlayMatch", { link = "Visual", default = true })
 
@@ -76,22 +73,19 @@ function M.open(opts)
 	local function float(buf, cfg)
 		cfg.relative = "editor"
 		cfg.style = "minimal"
-		cfg.border = BORDER
-		local win = vim.api.nvim_open_win(buf, false, cfg)
-		vim.wo[win].winhighlight = "FloatBorder:ListOverlayBorder"
-		return win
+		return vim.api.nvim_open_win(buf, false, cfg)
 	end
 	local fwin = float(fbuf, {
 		row = row, col = col, width = ui_w, height = 1,
-		title = " " .. (opts.title or "Filter") .. " ", title_pos = "center",
+		title = " " .. (opts.title or "Filter") .. " ", title_pos = "left",
 	})
 	local lwin = float(lbuf, {
 		row = body_row, col = col, width = list_w, height = body_h,
-		title = " list ", title_pos = "center",
+		title = " list ", title_pos = "left",
 	})
 	local pwin = float(pbuf, {
 		row = body_row, col = col + list_w + 3, width = prev_w, height = body_h,
-		title = " preview ", title_pos = "center", focusable = false,
+		title = " preview ", title_pos = "left", focusable = false,
 	})
 	vim.wo[lwin].cursorline = true
 	vim.wo[lwin].scrolloff = 2
@@ -118,7 +112,7 @@ function M.open(opts)
 		vim.bo[pbuf].filetype = ft or "" -- triggers FileType -> treesitter (init.lua)
 		if not vim.api.nvim_win_is_valid(pwin) then return end
 		vim.api.nvim_win_set_config(pwin, {
-			title = " " .. (title or "preview") .. " ", title_pos = "center",
+			title = " " .. (title or "preview") .. " ", title_pos = "left",
 		})
 		vim.api.nvim_buf_clear_namespace(pbuf, NS, 0, -1)
 		local count = vim.api.nvim_buf_line_count(pbuf)
