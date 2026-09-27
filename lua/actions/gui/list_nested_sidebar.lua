@@ -13,7 +13,8 @@
 --            top level, nothing to fold : on_collapse_root
 --   <CR>     parent node : same as l
 --            leaf node   : same as l, but jump to that window and close the list
---   <Esc>    close the sidebar
+--   <Esc>    close the sidebar and go back to the start: the window it was
+--            opened from gets its buffer and view back (undoes previews)
 --
 -- The tree is rebuilt from children() on every fold/unfold, so it never shows a
 -- stale view of its source. The sidebar is narrow, so instead of truncating deep
@@ -89,6 +90,12 @@ function M.open(opts)
 
 	-- the window the sidebar was opened from == the one to open files in
 	local target = vim.api.nvim_get_current_win()
+	-- where we started: <Esc> puts that window back the way it was
+	local start = {
+		win = target,
+		buf = vim.api.nvim_get_current_buf(),
+		view = vim.fn.winsaveview(),
+	}
 
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.bo[buf].bufhidden = "wipe"
@@ -210,6 +217,18 @@ function M.open(opts)
 		if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
 	end
 
+	-- <Esc>: close and undo whatever the previews did to the start window
+	local function back_to_start()
+		close()
+		if not vim.api.nvim_win_is_valid(start.win) then return end
+		vim.api.nvim_set_current_win(start.win)
+		if not vim.api.nvim_buf_is_valid(start.buf) then return end
+		if vim.api.nvim_win_get_buf(start.win) ~= start.buf then
+			vim.api.nvim_win_set_buf(start.win, start.buf)
+		end
+		vim.fn.winrestview(start.view)
+	end
+
 	-- the window files are opened in: the one the sidebar was opened from, else
 	-- any other normal window, else a fresh split next to the sidebar
 	local function open_win()
@@ -292,7 +311,7 @@ function M.open(opts)
 		vim.keymap.set({ "n", "x" }, lhs, "<Nop>", { buffer = buf, nowait = true })
 	end
 
-	map("<Esc>", close)
+	map("<Esc>", back_to_start)
 	map("l", function() activate(false) end)
 	map("h", collapse)
 	map("ö", function() activate(true) end)
