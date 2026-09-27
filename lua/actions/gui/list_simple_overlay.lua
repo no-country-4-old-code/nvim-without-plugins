@@ -109,8 +109,11 @@ function M.open(opts)
 		if item and opts.preview then
 			lines, ft, title, focus, marks = opts.preview(item)
 		end
+		-- readfile() hands NUL bytes (binary files) over as "\n", which a buffer
+		-- line must not contain: turn them back into NULs
+		lines = vim.tbl_map(function(l) return (l:gsub("\n", "\0")) end, lines or {})
 		vim.bo[pbuf].modifiable = true
-		vim.api.nvim_buf_set_lines(pbuf, 0, -1, false, lines or {})
+		vim.api.nvim_buf_set_lines(pbuf, 0, -1, false, lines)
 		vim.bo[pbuf].modifiable = false
 		vim.bo[pbuf].filetype = ft or "" -- triggers FileType -> treesitter (init.lua)
 		if not vim.api.nvim_win_is_valid(pwin) then return end
