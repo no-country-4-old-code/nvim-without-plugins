@@ -38,9 +38,7 @@ function M.setup()
 	vim.keymap.set({ "n", "o", "x" }, ".", "$", { desc = "Navigation : Set cursor to end of line" })
 
 	-- code navigation (lsp) --------------------------------------------------
-	vim.keymap.set("n", "<leader>cl", function()
-		vim.diagnostic.setqflist({ open = true })
-	end, { desc = "LSP : Browse diagnostics (linter)" })
+	vim.keymap.set("n", "<leader>cl", require("actions.diagnostic_list").open, { desc = "LSP : Browse diagnostics (sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>d", vim.lsp.buf.definition, { desc = "LSP : Go to definition" })
 	vim.keymap.set("n", "<leader>u", vim.lsp.buf.references, { desc = "LSP : Find usages / references" })
 	vim.keymap.set("n", "<leader>ct", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
