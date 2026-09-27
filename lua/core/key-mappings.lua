@@ -1,14 +1,11 @@
--- Same keymaps as before — plugin-free targets.
--- telescope -> core.picker / :grep / native cmds
--- nvim-tree -> netrw          diffview/fugitive/gitsigns -> core.git
--- dap/dapui -> core.debug (termdebug)   trouble/calltree -> loclist/quickfix
-
 local M = {}
 
 function M.setup()
 	local git = require("core.git")
 	local windows = require("core.windows")
 	local dbg = require("core.debug")
+	local history = require("custom.cursor-history") 
+	local signs = require("behaviour.git-signs")
 
 	-- helper -------------------------------------------------------------
 	local lsp_border = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" }
@@ -20,18 +17,19 @@ function M.setup()
 	vim.keymap.set("n", "<leader>y", require("custom.copy-mode").toggle, { desc = "Copy mode : Clipboard y/p, no line numbers (<Esc> leaves)" })
 	vim.keymap.set("n", "<leader>r", require("actions.replace_word_with_register").run, { desc = "Edit : Replace word under cursor with register (register kept)" })
 
-	-- navigation -----------------------------------------------------------
+	-- health -----------------------------------------------------------------
+	vim.keymap.set("n", "<leader>=", require("actions.health_screen").open, { desc = "Health : LSP status / indexing / log + checkhealth (new tab)" })
+	
+    -- navigation -----------------------------------------------------------
 	vim.keymap.set("n", "<leader>l", require("actions.file_tree").open, { desc = "Navigation : Project file tree (nested sidebar)" })
 	vim.keymap.set("n", "<leader>j", require("actions.jump_list").open, { desc = "Navigation : Browse jump history (sidebar, j/k walks it)" })
 	vim.keymap.set("n", "<leader>f", require("actions.find_files").open, { desc = "Navigation : Search by file name" })
 	vim.keymap.set("n", "<leader>K", require("actions.rip_grep").open, { desc = "Navigation : Rip grep file contents (list overlay)" })
 	vim.keymap.set("n", "<leader>k", function() require("actions.rip_grep").open(vim.fn.expand("<cword>")) end, { desc = "Navigation : Rip grep word under cursor (list overlay, prefilled)" })
 	vim.keymap.set("n", "<leader>fr", "<cmd>registers<CR>", { desc = "Navigation : Browse copy & paste registers" })
-	local signs = require("behaviour.git-signs")
 	vim.keymap.set("n", "f", function() signs.goto_hunk(1) end, { desc = "Navigation : Next modified block (git)" })
 	vim.keymap.set("n", "F", function() signs.goto_hunk(-1) end, { desc = "Navigation : Previous modified block (git)" })
 	vim.keymap.set("n", "<leader>w", windows.pick_window_to_jump, { desc = "Navigation : Pick window to jump to" })
-	local history = require("custom.cursor-history") -- richer than vim's jumplist: every visited area
 	vim.keymap.set("n", "<leader>n", history.back, { desc = "Navigation : Go back to previous position" })
 	vim.keymap.set("n", "<leader>b", history.forward, { desc = "Navigation : Go forward again" })
 	vim.keymap.set({ "n", "o", "x" }, ",", "^", { desc = "Navigation : Set cursor to start of line" })
@@ -39,16 +37,13 @@ function M.setup()
 
 	-- code navigation (lsp) --------------------------------------------------
 	vim.keymap.set("n", "<leader>cl", require("actions.diagnostic_list").open, { desc = "LSP : Browse diagnostics (sidebar, j/k walks them)" })
-	vim.keymap.set("n", "<leader>d", vim.lsp.buf.definition, { desc = "LSP : Go to definition" })
+	vim.keymap.set("n", "<leader>h", vim.lsp.buf.definition, { desc = "LSP : Go to definition" })
 	vim.keymap.set("n", "<leader>u", vim.lsp.buf.references, { desc = "LSP : Find usages / references" })
-	vim.keymap.set("n", "<leader>ct", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
-	vim.keymap.set("n", "<leader>cd", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
+	vim.keymap.set("n", "<leader>t", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
+	vim.keymap.set("n", "<leader>i", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })
 	vim.keymap.set("n", "<leader>ck", lsp_hover, { desc = "LSP : Hover docs of var" })
-
-	-- health -----------------------------------------------------------------
-	vim.keymap.set("n", "<leader>=", require("actions.health_screen").open, { desc = "Health : LSP status / indexing / log + checkhealth (new tab)" })
 
 	-- tabs -------------------------------------------------------------------
 	vim.keymap.set("n", "<leader>tn", "<cmd>tabnew<CR>", { desc = "Tabs : New empty tab (tabs)" })
