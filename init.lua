@@ -50,6 +50,7 @@ require("custom.tabs").setup()
 require("custom.tabline").setup()
 require("custom.dep-graph").setup()
 require("custom.smart-substitute").setup()
+require("custom.yank-ring").setup()
 -- custom.cppcheck is required on demand from ~/.nvim-config.lua (see its header)
 
 -- plugin replacements
