@@ -1,5 +1,7 @@
 -- Command built on the nested sidebar: every changed block of the repo, one
--- folder per changed file, one row per block ("  :line  first changed line").
+-- folder per changed file, one row per block ("  110  + 2 lines": where it
+-- starts, + added / ~ changed / - removed, how many lines -- in the colour of
+-- the matching gutter sign).
 -- j / k walk the blocks and the window next to the sidebar follows: it shows
 -- the file itself (highlighted code, not a diff) centered on the block, every
 -- block of the file marked -- green for added lines, the focus highlight for
@@ -32,9 +34,16 @@ local function set_highlights()
 	-- background only: whole lines that are shown as deleted keep their syntax colours
 	vim.api.nvim_set_hl(0, "GitStatusDeleteLine", { bg = "#37222c" })
 	vim.api.nvim_set_hl(0, "GitStatusGone", { fg = "#f7768e" }) -- row of a deleted file
+	-- the gutter's colours (behaviour.git-signs), should it not be set up
+	vim.api.nvim_set_hl(0, "GitSignAdd", { fg = "#9ece6a", default = true })
+	vim.api.nvim_set_hl(0, "GitSignChange", { fg = "#73daca", default = true })
+	vim.api.nvim_set_hl(0, "GitSignDelete", { fg = "#914c54", default = true })
 end
 
 local BLOCK_HL = { add = "GitStatusAdd", change = "GitStatusChange" }
+local ROW = { -- sign + colour of a block's row
+	add = { "+", "GitSignAdd" }, change = { "~", "GitSignChange" }, delete = { "-", "GitSignDelete" },
+}
 
 -- new-side line range a "@@ -a,b +c,d @@" header covers (d == 0: a pure
 -- deletion, which sits right after line c)
@@ -43,27 +52,6 @@ local function hunk_range(header)
 	start = math.max(tonumber(start) or 1, 1)
 	count = tonumber(count) or 1 -- "+12" without a count means one line
 	return start, count == 0 and start or start + count - 1
-end
-
--- first changed line of a hunk: walk from its "@@" header over the leading
--- context, counting up from the hunk's start line in the new file. The label
--- prefers the "+" line of that block -- that is what the file holds now; only
--- a pure deletion falls back to the removed "-" line.
-local function first_change(diff, header, start)
-	local lnum, text, n = nil, "", start
-	for i = header + 1, #diff do
-		local c = diff[i]:sub(1, 1)
-		if c == "+" or c == "-" then
-			if not lnum then lnum, text = math.max(n, 1), diff[i] end
-			if c == "+" then return lnum, vim.trim(diff[i]) end
-		elseif c == " " then
-			if lnum then break end -- past the first changed block of the hunk
-			n = n + 1
-		else
-			break -- end of the hunk ("\ No newline...", next header, next file)
-		end
-	end
-	return lnum or math.max(n, 1), vim.trim(text)
 end
 
 -- the body of a `--unified=0` hunk: its removed lines (text only) and how many
@@ -110,7 +98,7 @@ end
 --- the changed files, each with its blocks: every block, even ones a context
 --- diff would merge into a single hunk
 --- @return table[] files -- { path, note = string|nil (single-row file),
----   deleted, blocks = { { file, lnum, text, kind = "add"|"change"|"delete",
+---   deleted, blocks = { { file, lnum, count, kind = "add"|"change"|"delete",
 ---   first, last = the block's lines in the working tree (add/change),
 ---   after, removed = anchor line + the lost text (delete) } } }
 local function collect(root, rev)
@@ -127,10 +115,10 @@ local function collect(root, rev)
 		else
 			for _, header in ipairs(sec.hunks) do
 				local first, last = hunk_range(diff[header])
-				local lnum, text = first_change(diff, header, first)
 				local removed, added = hunk_body(diff, header)
 				file.blocks[#file.blocks + 1] = {
-					file = file, lnum = lnum, text = text,
+					file = file, lnum = first,
+					count = added > 0 and added or #removed, -- lines it holds now, else lost
 					kind = (added == 0 and "delete") or (#removed == 0 and "add") or "change",
 					first = first, last = last,
 					-- a deletion is written as "+c,0": the text sat after new-side line
@@ -261,11 +249,14 @@ function M.open()
 			return node.file and (node.file.path .. ":" .. node.lnum) or node.path
 		end,
 		label = function(node)
-			if node.file then return string.format(":%d  %s", node.lnum, node.text) end
+			if node.file then
+				local n = node.count
+				return string.format("%d  %s %d line%s", node.lnum, ROW[node.kind][1], n, n == 1 and "" or "s")
+			end
 			return node.note and (node.path .. "  " .. node.note) or node.path
 		end,
 		highlight = function(node)
-			if node.file then return nil end
+			if node.file then return ROW[node.kind][2] end
 			if node.deleted then return "GitStatusGone" end
 			return node.note and "Comment" or "Directory"
 		end,
