@@ -16,7 +16,7 @@ function M.setup()
 	local function lsp_signature() vim.lsp.buf.signature_help({ border = lsp_border }) end
 
 	-- general --------------------------------------------------------------
-	vim.keymap.set("n", "<leader>h", require("actions.show_keymaps").open, { desc = "Show keymaps" })
+	vim.keymap.set("n", "<leader>?", require("actions.show_keymaps").open, { desc = "Show keymaps" })
 	vim.keymap.set("n", "<leader>y", require("custom.copy-mode").toggle, { desc = "Copy mode : Clipboard y/p, no line numbers (<Esc> leaves)" })
 	vim.keymap.set("n", "<leader>r", require("actions.replace_word_with_register").run, { desc = "Edit : Replace word under cursor with register (register kept)" })
 
@@ -43,32 +43,14 @@ function M.setup()
 	end, { desc = "LSP : Browse diagnostics (linter)" })
 	vim.keymap.set("n", "<leader>d", vim.lsp.buf.definition, { desc = "LSP : Go to definition" })
 	vim.keymap.set("n", "<leader>u", vim.lsp.buf.references, { desc = "LSP : Find usages / references" })
-	-- incoming/outgoing calls land in the quickfix list natively (replaces calltree)
-	vim.keymap.set("n", "<leader>ci", vim.lsp.buf.incoming_calls, { desc = "LSP : Incoming calls (who calls this)" })
-	vim.keymap.set("n", "<leader>co", vim.lsp.buf.outgoing_calls, { desc = "LSP : Outgoing calls (what this calls)" })
 	vim.keymap.set("n", "<leader>ct", require("actions.call_tree").open, { desc = "LSP : Call tree of current function (nested sidebar, h = callers)" })
 	vim.keymap.set("n", "<leader>cd", require("actions.function_list").open, { desc = "LSP : Functions of current file (nested sidebar, j/k walks them)" })
-	vim.keymap.set("n", "<leader>cs", function() -- replaces Trouble symbols
-		vim.lsp.buf.document_symbol()
-	end, { desc = "LSP : Symbol outline of current file (loclist)" })
-	vim.keymap.set("n", "<leader>cg", "<cmd>CDeps<CR>", { desc = "C/C++ : Folder dependency graph" })
-	-- t / T only exist in C/C++ buffers: elsewhere they stay vim's till-motion
-	vim.api.nvim_create_autocmd("FileType", {
-		pattern = { "c", "cpp" },
-		callback = function(args)
-			local fn = require("custom.goto-function")
-			vim.keymap.set("n", "t", function() fn.jump(1) end,
-				{ buffer = args.buf, desc = "C/C++ : Jump to next function definition" })
-			vim.keymap.set("n", "T", function() fn.jump(-1) end,
-				{ buffer = args.buf, desc = "C/C++ : Jump to previous function definition" })
-		end,
-	})
 	vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "LSP : Rename symbol" })
 	vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "LSP : Code actions" })
-	vim.keymap.set("n", "<leader>cm", vim.lsp.buf.implementation, { desc = "LSP : Jump to implementation" })
 	vim.keymap.set("n", "<leader>ck", lsp_hover, { desc = "LSP : Hover docs of var" })
-	vim.keymap.set("n", "<leader>cf", lsp_signature, { desc = "LSP : Show Fn-Signature help" })
-	local lsp_screen = require("actions.lsp_screen")
+	
+    -- I want one screen / health monitoring which offers different options like :CheckHealth and this LSP tingyis...
+    local lsp_screen = require("actions.lsp_screen")
 	vim.keymap.set("n", "<leader>cS", lsp_screen.status, { desc = "LSP : Status of running servers" })
 	vim.keymap.set("n", "<leader>cI", lsp_screen.indexing, { desc = "LSP : Indexing / progress (live)" })
 	vim.keymap.set("n", "<leader>cL", lsp_screen.log, { desc = "LSP : Open log (new tab)" })
