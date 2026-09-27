@@ -1,7 +1,7 @@
 -- Command built on the list overlay: search file contents with ripgrep, live.
 -- The overlay's filter box IS the rg query -- every keystroke re-runs ripgrep
 -- and the list shows the matches. <CR> jumps to file:line:col, <Esc> closes.
--- Same overlay as find_files / git_status.
+-- Same overlay as find_files.
 
 local overlay = require("actions.gui.list_simple_overlay")
 local search_env = require("actions.search_env")

@@ -1,11 +1,12 @@
--- Command built on the list overlay: browse every changed block in the repo
--- like a rip-grep result -- one row per block, "path:line  first changed
--- line". The preview shows the file itself (highlighted code, not a diff)
--- centered on that block, with the whole block marked: green for added lines,
--- the normal focus highlight for changed ones, and -- since removed text has
--- no line of its own left -- red "ghost lines" (virtual lines: no number, not
--- part of the buffer) for a deletion. <CR> jumps to the block in the working
--- tree, <Esc> closes.
+-- Command built on the nested sidebar: every changed block of the repo, one
+-- folder per changed file, one row per block ("  :line  first changed line").
+-- j / k walk the blocks and the window next to the sidebar follows: it shows
+-- the file itself (highlighted code, not a diff) centered on the block, every
+-- block of the file marked -- green for added lines, the focus highlight for
+-- changed ones, and -- since removed text has no line of its own left -- red
+-- "ghost lines" (virtual lines: no number, not part of the buffer) for a
+-- deletion. l / h fold a file, <CR> / o jump to the block and close the list,
+-- <Esc> closes it.
 --
 -- The list comes from `git diff --unified=0` so that neighbouring changes stay
 -- separate rows -- the same blocks the gutter signs mark.
@@ -14,31 +15,26 @@
 -- this from a file outside the working directory shows *its* checkout's changes.
 --
 -- Compared against the commit the branch started from, else HEAD
--- (see core.git-ref). Untracked files are listed as one entry.
+-- (see core.git-ref). Untracked, deleted and binary files are single rows.
 
-local overlay = require("actions.gui.list_simple_overlay")
+local sidebar = require("actions.gui.list_nested_sidebar")
 local git_ref = require("core.git-ref")
 
 local M = {}
 
-local CONTEXT = 200 -- lines read past the block, so the preview can center it
+local NS = vim.api.nvim_create_namespace("git_status")
 
--- tokyonight diff colours; the changed block keeps the overlay's own focus
--- highlight, so only "added" and "deleted" need a group of their own
+-- tokyonight diff colours
 local function set_highlights()
-	vim.api.nvim_set_hl(0, "GitStatusPreviewAdd", { bg = "#20303b" })
-	vim.api.nvim_set_hl(0, "GitStatusPreviewDelete", { fg = "#f7768e", bg = "#37222c" })
+	vim.api.nvim_set_hl(0, "GitStatusAdd", { bg = "#20303b" })
+	vim.api.nvim_set_hl(0, "GitStatusChange", { link = "Visual", default = true })
+	vim.api.nvim_set_hl(0, "GitStatusDelete", { fg = "#f7768e", bg = "#37222c" })
 	-- background only: whole lines that are shown as deleted keep their syntax colours
-	vim.api.nvim_set_hl(0, "GitStatusPreviewDeleteLine", { bg = "#37222c" })
+	vim.api.nvim_set_hl(0, "GitStatusDeleteLine", { bg = "#37222c" })
+	vim.api.nvim_set_hl(0, "GitStatusGone", { fg = "#f7768e" }) -- row of a deleted file
 end
 
-local BLOCK_HL = { add = "GitStatusPreviewAdd", change = "ListOverlayMatch" }
-
--- "path:lnum:text" -> its pieces (same shape as rg --vimgrep, on purpose)
-local function parse(item)
-	local path, lnum, text = item:match("^(.-):(%d+):(.*)$")
-	return path, tonumber(lnum), text
-end
+local BLOCK_HL = { add = "GitStatusAdd", change = "GitStatusChange" }
 
 -- new-side line range a "@@ -a,b +c,d @@" header covers (d == 0: a pure
 -- deletion, which sits right after line c)
@@ -104,70 +100,76 @@ local function split_files(diff)
 			cur.hunks[#cur.hunks + 1] = i
 		elseif cur and line:sub(1, 13) == "Binary files " then
 			cur.binary = true
+		elseif cur and line:sub(1, 18) == "deleted file mode " then
+			cur.deleted = true
 		end
 	end
 	return order
 end
 
---- one item per changed block: every block, even ones a context diff would
---- merge into a single hunk
---- @return string[] items, table blocks
----   -- "path:lnum" -> what the preview marks: { kind = "add"|"change"|"delete",
----   --   first, last = the block's lines in the working tree (add/change),
----   --   after, removed = anchor line + the lost text (delete) }
+--- the changed files, each with its blocks: every block, even ones a context
+--- diff would merge into a single hunk
+--- @return table[] files -- { path, note = string|nil (single-row file),
+---   deleted, blocks = { { file, lnum, text, kind = "add"|"change"|"delete",
+---   first, last = the block's lines in the working tree (add/change),
+---   after, removed = anchor line + the lost text (delete) } } }
 local function collect(root, rev)
 	local diff = vim.fn.systemlist({ "git", "-C", root, "diff", "--unified=0", rev })
-	local items, blocks = {}, {}
+	local files = {}
 
 	for _, sec in ipairs(split_files(diff)) do
-		if #sec.hunks == 0 then -- binary file, rename without edits, mode change
-			items[#items + 1] = string.format("%s:1:%s", sec.path, sec.binary and "(binary)" or "(no line changes)")
-		end
-		for _, header in ipairs(sec.hunks) do
-			local first, last = hunk_range(diff[header])
-			local lnum, text = first_change(diff, header, first)
-			local removed, added = hunk_body(diff, header)
-			items[#items + 1] = string.format("%s:%d:%s", sec.path, lnum, text)
-			blocks[string.format("%s:%d", sec.path, lnum)] = {
-				kind = (added == 0 and "delete") or (#removed == 0 and "add") or "change",
-				first = first, last = last,
-				-- a deletion is written as "+c,0": the text sat after new-side line
-				-- c, and c == 0 means it sat above the first line
-				after = tonumber(diff[header]:match("%+(%d+)")) or 0,
-				removed = removed,
-			}
+		local file = { path = sec.path, blocks = {}, deleted = sec.deleted }
+		files[#files + 1] = file
+		if sec.deleted then
+			file.note = "(deleted)"
+		elseif #sec.hunks == 0 then -- binary file, rename without edits, mode change
+			file.note = sec.binary and "(binary)" or "(no line changes)"
+		else
+			for _, header in ipairs(sec.hunks) do
+				local first, last = hunk_range(diff[header])
+				local lnum, text = first_change(diff, header, first)
+				local removed, added = hunk_body(diff, header)
+				file.blocks[#file.blocks + 1] = {
+					file = file, lnum = lnum, text = text,
+					kind = (added == 0 and "delete") or (#removed == 0 and "add") or "change",
+					first = first, last = last,
+					-- a deletion is written as "+c,0": the text sat after new-side line
+					-- c, and c == 0 means it sat above the first line
+					after = tonumber(diff[header]:match("%+(%d+)")) or 0,
+					removed = removed,
+				}
+			end
 		end
 	end
 
 	for _, path in ipairs(vim.fn.systemlist({ "git", "-C", root, "ls-files", "--others", "--exclude-standard" })) do
-		items[#items + 1] = string.format("%s:1:%s", path, "(untracked)")
 		-- nothing of it is in the ref: the whole file is one added block
-		blocks[path .. ":1"] = { kind = "add", first = 1, last = math.huge }
+		local file = { path = path, note = "(untracked)", blocks = {} }
+		file.whole = { file = file, lnum = 1, kind = "add", first = 1, last = math.huge }
+		files[#files + 1] = file
 	end
 
-	return items, blocks
+	return files
 end
 
---- extmarks that mark `block` in the previewed file (see the overlay's `preview`)
-local function block_marks(block, count)
-	local marks = {}
+--- mark `block` in buf
+local function mark(buf, block)
+	local count = vim.api.nvim_buf_line_count(buf)
 	if block.kind == "delete" then
 		-- the removed text has no line in the file: show it as virtual lines,
 		-- below its anchor -- or above line 1 when it was cut from the top
 		local virt = {}
 		for _, line in ipairs(block.removed) do
-			virt[#virt + 1] = { { line == "" and " " or line, "GitStatusPreviewDelete" } }
+			virt[#virt + 1] = { { line == "" and " " or line, "GitStatusDelete" } }
 		end
-		marks[1] = {
-			line = math.max(block.after, 1),
-			opts = { virt_lines = virt, virt_lines_above = block.after == 0 },
-		}
+		pcall(vim.api.nvim_buf_set_extmark, buf, NS, math.min(math.max(block.after, 1), count) - 1, 0, {
+			virt_lines = virt, virt_lines_above = block.after == 0,
+		})
 	else
 		for line = block.first, math.min(block.last, count) do
-			marks[#marks + 1] = { line = line, opts = { line_hl_group = BLOCK_HL[block.kind] } }
+			pcall(vim.api.nvim_buf_set_extmark, buf, NS, line - 1, 0, { line_hl_group = BLOCK_HL[block.kind] })
 		end
 	end
-	return marks
 end
 
 function M.open()
@@ -179,49 +181,103 @@ function M.open()
 	local base, branch = git_ref.get(root)
 	local rev = base or "HEAD"
 	local label = base and string.format("%s (%s)", base:sub(1, 8), branch) or rev
-	local items, blocks = collect(root, rev)
+	local files = collect(root, rev)
+	if #files == 0 then
+		vim.notify("No changes vs " .. label, vim.log.levels.INFO)
+		return
+	end
 	set_highlights()
 
-	overlay.open({
-		-- name the repo too: it is not necessarily the one of the cwd
-		title = string.format("Git changes vs %s  [%s]", label, vim.fs.basename(root)),
-		start_on_list = true, -- focus starts on the list, not the filter box
-		items = items,
-		display = function(item)
-			local path, lnum, text = parse(item)
-			if not path then return item end
-			return string.format("%s:%d  %s", path, lnum, text)
-		end,
-		preview = function(item)
-			local path, lnum, text = parse(item)
-			if not path then return { "-- no file --" } end
-			if text == "(binary)" then return { "-- binary file --" } end
-			local file = root .. "/" .. path
-			local ft = vim.filetype.match({ filename = path })
-			if vim.fn.filereadable(file) == 0 then
-				-- gone from the working tree: show the version it was deleted from --
-				-- every line of it is lost, so the whole preview is marked deleted
-				local gone = vim.fn.systemlist({ "git", "-C", root, "show", rev .. ":" .. path })
-				if vim.v.shell_error ~= 0 then return { "-- not readable --" } end
-				gone = vim.list_slice(gone, 1, (lnum or 1) + CONTEXT)
-				local marks = {}
-				for line = 1, #gone do
-					marks[line] = { line = line, opts = { line_hl_group = "GitStatusPreviewDeleteLine" } }
-				end
-				return gone, ft, path .. "  (deleted)", lnum, marks
+	local marked -- buffer holding the block marks
+	local shown_win -- window the block is shown in
+
+	local function unmark()
+		if marked and vim.api.nvim_buf_is_valid(marked) then
+			vim.api.nvim_buf_clear_namespace(marked, NS, 0, -1)
+		end
+		marked = nil
+	end
+
+	-- the file in the window next to the sidebar, all its blocks marked, the
+	-- row's block centered (a file row: its first block)
+	local function show(node, win)
+		shown_win = win
+		unmark()
+		local file = node.file or node
+		local block = node.file and node or file.blocks[1] or file.whole
+		local abs = root .. "/" .. file.path
+
+		local buf
+		if file.deleted then
+			-- gone from the working tree: show the version it was deleted from --
+			-- every line of it is lost, so the whole buffer is marked deleted
+			local gone = vim.fn.systemlist({ "git", "-C", root, "show", rev .. ":" .. file.path })
+			if vim.v.shell_error ~= 0 then return end
+			buf = vim.api.nvim_create_buf(false, true)
+			vim.bo[buf].bufhidden = "wipe"
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, gone)
+			vim.bo[buf].modifiable = false
+			vim.bo[buf].filetype = vim.filetype.match({ filename = file.path }) or ""
+			vim.api.nvim_win_set_buf(win, buf)
+			for line = 1, #gone do
+				vim.api.nvim_buf_set_extmark(buf, NS, line - 1, 0, { line_hl_group = "GitStatusDeleteLine" })
 			end
-			-- read past the block so it can be centered
-			local lines = vim.fn.readfile(file, "", (lnum or 1) + CONTEXT)
-			local block = blocks[string.format("%s:%d", path, lnum)]
-			return lines, ft, path, lnum, block and block_marks(block, #lines)
+		else
+			buf = vim.fn.bufadd(abs)
+			if vim.api.nvim_win_get_buf(win) ~= buf then
+				vim.api.nvim_win_call(win, function()
+					pcall(vim.cmd, "edit " .. vim.fn.fnameescape(abs))
+				end)
+			end
+			if vim.api.nvim_win_get_buf(win) ~= buf then return end -- edit refused
+			for _, b in ipairs(file.whole and { file.whole } or file.blocks) do
+				mark(buf, b)
+			end
+		end
+		marked = buf
+
+		if block then
+			local count = vim.api.nvim_buf_line_count(buf)
+			local line = block.kind == "delete" and block.after or block.lnum
+			pcall(vim.api.nvim_win_set_cursor, win, { math.min(math.max(line, 1), count), 0 })
+		end
+		vim.api.nvim_win_call(win, function() vim.cmd("normal! zz") end)
+	end
+
+	-- open on the first block
+	local first = files[1]
+	local reveal = { first.path }
+	if #first.blocks > 0 then
+		reveal[2] = first.path .. ":" .. first.blocks[1].lnum
+	end
+
+	sidebar.open({
+		filetype = "gitstatus",
+		width = 40,
+		root = {}, -- no row of its own
+		children = function(node) return node.path and node.blocks or files end,
+		is_parent = function(node) return node.path ~= nil and #node.blocks > 0 end,
+		key = function(node)
+			return node.file and (node.file.path .. ":" .. node.lnum) or node.path
 		end,
-		on_select = function(item)
-			local path, lnum = parse(item)
-			if not path then return end
-			vim.cmd("edit " .. vim.fn.fnameescape(root .. "/" .. path))
-			pcall(vim.api.nvim_win_set_cursor, 0, { lnum or 1, 0 })
+		label = function(node)
+			if node.file then return string.format(":%d  %s", node.lnum, node.text) end
+			return node.note and (node.path .. "  " .. node.note) or node.path
 		end,
+		highlight = function(node)
+			if node.file then return nil end
+			if node.deleted then return "GitStatusGone" end
+			return node.note and "Comment" or "Directory"
+		end,
+		reveal = reveal,
+		on_move = show,
+		on_open = show,
 	})
+
+	-- the sidebar is the current window now; name the repo too: it is not
+	-- necessarily the one of the cwd
+	vim.wo.winbar = string.format(" changes vs %s  [%s]", label, vim.fs.basename(root))
+	vim.api.nvim_create_autocmd("BufWipeout", { buffer = 0, once = true, callback = unmark })
 end
 
 return M

@@ -1,7 +1,7 @@
 -- Command built on the list overlay: browse all git branches, with a preview
 -- showing which files differ between the highlighted branch and the current one.
 -- <CR> checks the branch out, <Esc> closes.
--- Same overlay as find_files / rip_grep / git_status.
+-- Same overlay as find_files / rip_grep.
 
 local overlay = require("actions.gui.list_simple_overlay")
 
