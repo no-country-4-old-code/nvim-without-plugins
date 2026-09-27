@@ -2,10 +2,9 @@
 -- with a live code preview of the highlighted entry. <CR> jumps to file:line:col,
 -- <Esc> closes. Same overlay as find_files / rip_grep.
 --
--- The source is custom.cursor-history (seeded from vim's jumplist at startup),
--- including the places a new branch dropped from CTRL-O / CTRL-I: those are no
--- longer reachable by going back, but they are still places we have been.
--- One entry per place -- positions a few lines apart are listed once.
+-- The source is custom.cursor-history of the current tab (seeded from vim's
+-- jumplist at startup). One entry per place -- positions a few lines apart are
+-- listed once.
 
 local overlay = require("actions.gui.list_simple_overlay")
 

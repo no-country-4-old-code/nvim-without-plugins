@@ -1,39 +1,34 @@
--- CTRL-O / CTRL-I as a history of the places you *stayed at*, not vim's jumplist.
+-- <leader>n / <leader>b as a history of the places you *worked at*, not vim's jumplist.
 --
--- Vim only records real "jumps" and forgets where you worked; here the history
--- is one list plus a "current point" (the entry you are standing on). Entries
--- are added when
---   * the cursor sits on the same line for 3 seconds (a 0.5s timer checks), or
---   * a jump happens (vim's jumplist grew: /, G, gd, :grep, a picker, ...) --
---     then both the position you left and the one you landed on are pushed.
--- A position is never added while the current point is already within 5 lines
--- of it, so idling after a CTRL-O writes nothing and CTRL-I still works.
--- Anything else (a jump / a settled line farther away) rewrites the history
--- from the current point on: the forward entries leave the history. They are
--- kept in a second list though -- unreachable by CTRL-O / CTRL-I, but still
--- places we have been, so M.entries() (the list overlay) shows them.
+-- One list plus a "current point" (the entry you are standing on). An entry is
+-- added on
+--   * every jump (vim's jumplist of the window grew: /, G, gd, :grep, a
+--     picker, ...) -- both the position you left and the one you landed on,
+--   * entering / leaving insert mode,
+--   * entering / leaving visual mode,
+--   * a yank and a paste.
+-- A position on the line of the current point is not added again. Adding an
+-- entry drops everything after the current point (like vim's jumplist).
 --
--- At startup the list is seeded from vim's jumplist (restored from shada), so
--- a fresh session already knows the places of the previous one.
+-- Every tab has its own history. A new tab starts with a copy of the history of
+-- the tab it was opened from and grows independently from there.
+--
+-- At startup the first tab's list is seeded from vim's jumplist (restored from
+-- shada), so a fresh session already knows the places of the previous one.
 --
 -- Positions of loaded buffers are stored as extmarks and follow the text; the
 -- seeded ones stay plain file:line until they are visited.
 
 local M = {}
 
-local MAX = 100 -- entries kept
-local NEAR = 5 -- lines: this close counts as the same place
-local DWELL = 3000 -- ms on one line before it is remembered
-local TICK = 500 -- ms between checks
+local MAX = 100 -- entries kept per tab
+local NEAR = 5 -- lines: the list overlay shows positions this close once
 
 local ns = vim.api.nvim_create_namespace("cursor-history")
 
-local hist, idx = {}, 0 -- oldest -> newest, idx = where we currently are
-local seen = {} -- entries overwritten by a new branch: gone from CTRL-O, kept for the list
-local seq = 0 -- order in which entries were recorded (both lists)
-local dwell = {} -- line the cursor is sitting on right now
-local jump_mark = { n = 0, file = "", lnum = 0 } -- last seen end of vim's jumplist
-local timer
+local tabs = {} -- tabpage -> { hist = oldest -> newest, idx = where we currently are }
+local parent -- tab left last: a new tab copies its history
+local jump_marks = {} -- window -> last seen end of its jumplist
 
 -- entry -> line, col (nil if its buffer / extmark is gone)
 local function entry_pos(entry)
@@ -61,15 +56,38 @@ local function drop(entry)
 	end
 end
 
-local function near(entry, file, lnum)
-	if not entry then return false end
-	local l = entry_pos(entry)
-	return l ~= nil and entry_file(entry) == file and math.abs(l - lnum) <= NEAR
+local function make_entry(buf, lnum, col, file)
+	if buf and vim.api.nvim_buf_is_loaded(buf) then
+		local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, lnum - 1, col, {})
+		if ok then return { buf = buf, id = id } end
+	end
+	return { file = file, lnum = lnum, col = col }
+end
+
+-- history of the current tab; a new tab starts as a copy of its parent's
+local function state()
+	local tab = vim.api.nvim_get_current_tabpage()
+	if tabs[tab] then return tabs[tab] end
+	local s = { hist = {}, idx = 0 }
+	local from = parent and tabs[parent]
+	if from then
+		for _, entry in ipairs(from.hist) do
+			local lnum, col = entry_pos(entry)
+			local file = lnum and entry_file(entry)
+			if file then -- own extmarks: the tabs drop their entries independently
+				s.hist[#s.hist + 1] = make_entry(entry.id and entry.buf, lnum, col, file)
+			end
+			if entry == from.hist[from.idx] then s.idx = #s.hist end
+		end
+	end
+	tabs[tab] = s
+	return s
 end
 
 -- real files only (no netrw, quickfix, picker overlays, ...)
 local function recordable(buf)
-	return vim.bo[buf].buftype == "" and vim.bo[buf].buflisted and vim.api.nvim_buf_get_name(buf) ~= ""
+	return vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].buftype == "" and vim.bo[buf].buflisted
+		and vim.api.nvim_buf_get_name(buf) ~= ""
 end
 
 local function here()
@@ -79,60 +97,61 @@ local function here()
 end
 
 -- forget entries whose buffer was unloaded / wiped, keeping idx on its entry
-local function prune()
-	for i = #hist, 1, -1 do
-		if not entry_pos(hist[i]) then
-			table.remove(hist, i)
-			if i <= idx then idx = idx - 1 end
+local function prune(s)
+	for i = #s.hist, 1, -1 do
+		if not entry_pos(s.hist[i]) then
+			table.remove(s.hist, i)
+			if i <= s.idx then s.idx = s.idx - 1 end
 		end
 	end
-	for i = #seen, 1, -1 do
-		if not entry_pos(seen[i]) then table.remove(seen, i) end
-	end
-	if idx < 1 and #hist > 0 then idx = 1 end
-	if idx > #hist then idx = #hist end
+	s.idx = math.max(math.min(s.idx, #s.hist), #s.hist > 0 and 1 or 0)
 end
 
-local function make_entry(buf, lnum, col, file)
-	seq = seq + 1
-	if buf and vim.api.nvim_buf_is_loaded(buf) then
-		local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, lnum - 1, col, {})
-		if ok then return { buf = buf, id = id, seq = seq } end
-	end
-	return { file = file, lnum = lnum, col = col, seq = seq }
-end
-
--- dropped from the history by a new branch, but still a place we have been
-local function archive(entry)
-	if not entry_pos(entry) then return drop(entry) end
-	seen[#seen + 1] = entry
-	while #seen > MAX do
-		drop(seen[1])
-		table.remove(seen, 1)
-	end
-end
-
--- remember a position: everything after the current point leaves the history
--- (CTRL-I is gone) but is kept in `seen`, so the list overlay still shows it
+-- remember a position; everything after the current point leaves the history
 local function record(buf, lnum, col, file)
-	for i = idx + 1, #hist do
-		archive(hist[i])
+	if not recordable(buf) then return end
+	local s = state()
+	local cur = s.hist[s.idx]
+	if cur and entry_file(cur) == file and entry_pos(cur) == lnum then return end
+	for i = #s.hist, s.idx + 1, -1 do
+		drop(s.hist[i])
+		s.hist[i] = nil
 	end
-	for i = #hist, idx + 1, -1 do
-		hist[i] = nil
+	s.hist[#s.hist + 1] = make_entry(buf, lnum, col, file)
+	while #s.hist > MAX do
+		drop(table.remove(s.hist, 1))
 	end
-	hist[#hist + 1] = make_entry(buf, lnum, col, file)
-	while #hist > MAX do
-		drop(hist[1])
-		table.remove(hist, 1)
-		idx = idx - 1
-	end
-	idx = #hist
+	s.idx = #s.hist
 end
 
--- the cursor is where it should be: do not record this spot again
-local function anchor(file, lnum, col, done)
-	dwell = { file = file, lnum = lnum, col = col, at = vim.uv.now(), done = done }
+local function record_here()
+	record(here())
+end
+
+-- end of the current window's jumplist, i.e. the position of the most recent jump
+local function jumplist_state()
+	local list = vim.fn.getjumplist()[1]
+	local last = list[#list]
+	if not last then return { n = 0, lnum = 0 } end
+	return { n = #list, buf = last.bufnr, lnum = last.lnum, col = last.col or 0 }
+end
+
+-- the current window's jumplist as it is now is known: no jump to report
+local function sync_jumps()
+	jump_marks[vim.api.nvim_get_current_win()] = jumplist_state()
+end
+
+-- CursorMoved: did the window's jumplist grow? Then push where we came from
+-- and where we are now.
+local function check_jump()
+	local win = vim.api.nvim_get_current_win()
+	local old, now = jump_marks[win], jumplist_state()
+	jump_marks[win] = now
+	if not old or (now.n == old.n and now.buf == old.buf and now.lnum == old.lnum) then return end
+	if now.buf and vim.api.nvim_buf_is_valid(now.buf) then
+		record(now.buf, now.lnum, now.col, vim.api.nvim_buf_get_name(now.buf))
+	end
+	record_here()
 end
 
 local function goto_entry(entry)
@@ -155,72 +174,19 @@ local function goto_entry(entry)
 	end
 	pcall(vim.api.nvim_win_set_cursor, 0, { lnum, col })
 	vim.cmd("normal! zv") -- open folds around the target
-	local _, l, c, file = here()
-	jump_mark = M._jumplist_state() -- our own move is not a jump
-	anchor(file, l, c, true)
+	sync_jumps() -- our own move is not a jump
 end
 
--- end of vim's jumplist, i.e. the position of the most recent jump
-function M._jumplist_state()
-	local list = vim.fn.getjumplist()[1]
-	local last = list[#list]
-	if not last then return { n = 0, file = "", lnum = 0 } end
-	local buf = last.bufnr
-	local file = (buf and vim.api.nvim_buf_is_valid(buf)) and vim.api.nvim_buf_get_name(buf) or ""
-	return { n = #list, file = file, lnum = last.lnum, col = last.col or 0, buf = buf }
-end
-
--- a jump happened: push where we came from and where we are now
-local function on_jump(from)
-	if from.buf and vim.api.nvim_buf_is_valid(from.buf) and recordable(from.buf)
-		and from.file ~= "" and not near(hist[idx], from.file, from.lnum) then
-		record(from.buf, from.lnum, from.col, from.file)
-	end
-	local buf, lnum, col, file = here()
-	if recordable(buf) and not near(hist[idx], file, lnum) then
-		record(buf, lnum, col, file)
-	end
-	anchor(file, lnum, col, true)
-end
-
-local function tick()
-	local buf, lnum, col, file = here()
-
-	local state = M._jumplist_state()
-	local jumped = state.n ~= jump_mark.n or state.file ~= jump_mark.file or state.lnum ~= jump_mark.lnum
-	jump_mark = state
-	if jumped then
-		on_jump(state)
-		return
-	end
-
-	if not recordable(buf) then
-		dwell = {}
-		return
-	end
-	if file ~= dwell.file or lnum ~= dwell.lnum then
-		anchor(file, lnum, col, false) -- moved: start counting again
-		return
-	end
-	if dwell.done or vim.uv.now() - dwell.at < DWELL then return end
-	dwell.done = true
-	if not near(hist[idx], file, lnum) then record(buf, lnum, col, file) end
-end
-
--- every place of this session, newest first: the live history plus the entries
--- a new branch overwrote. Positions within NEAR lines of an already listed one
--- are left out, the newest of them wins. Columns are 0-based, as everywhere.
+-- the places of the current tab, newest first. Positions within NEAR lines of
+-- an already listed one are left out, the newest of them wins. Columns are
+-- 0-based, as everywhere.
 function M.entries()
-	prune()
-	local all = {}
-	for _, entry in ipairs(hist) do all[#all + 1] = entry end
-	for _, entry in ipairs(seen) do all[#all + 1] = entry end
-	table.sort(all, function(a, b) return (a.seq or 0) > (b.seq or 0) end)
-
+	local s = state()
+	prune(s)
 	local out = {}
-	for _, entry in ipairs(all) do
-		local lnum, col = entry_pos(entry)
-		local file = lnum and entry_file(entry) or nil
+	for i = #s.hist, 1, -1 do
+		local lnum, col = entry_pos(s.hist[i])
+		local file = lnum and entry_file(s.hist[i]) or nil
 		if file and file ~= "" then
 			local known = false
 			for _, o in ipairs(out) do
@@ -229,59 +195,85 @@ function M.entries()
 					break
 				end
 			end
-			if not known then
-				out[#out + 1] = { file = file, lnum = lnum, col = col, current = entry == hist[idx] }
-			end
+			if not known then out[#out + 1] = { file = file, lnum = lnum, col = col } end
 		end
 	end
 	return out
 end
 
 function M.back()
-	prune()
-	local buf, lnum, col, file = here()
-	-- standing somewhere the history does not know: keep it, so CTRL-I returns
-	if recordable(buf) and not near(hist[idx], file, lnum) then record(buf, lnum, col, file) end
-	if idx < 2 then return end
-	idx = idx - 1
-	goto_entry(hist[idx])
+	local s = state()
+	prune(s)
+	-- standing somewhere the history does not know: keep it, so forward returns
+	record_here()
+	if s.idx < 2 then return end
+	s.idx = s.idx - 1
+	goto_entry(s.hist[s.idx])
 end
 
 function M.forward()
-	prune()
-	if idx >= #hist then return end
-	idx = idx + 1
-	goto_entry(hist[idx])
+	local s = state()
+	prune(s)
+	if s.idx >= #s.hist then return end
+	s.idx = s.idx + 1
+	goto_entry(s.hist[s.idx])
 end
 
 -- start from vim's jumplist (shada restored it from the previous session)
 local function seed()
+	local s = state()
 	for _, j in ipairs(vim.fn.getjumplist()[1]) do
 		local name = j.bufnr and vim.fn.bufname(j.bufnr) or ""
 		local file = name ~= "" and vim.fn.fnamemodify(name, ":p") or ""
-		if file ~= "" and vim.fn.filereadable(file) == 1 and not near(hist[#hist], file, j.lnum) then
-			seq = seq + 1
-			hist[#hist + 1] = { file = file, lnum = j.lnum, col = j.col or 0, seq = seq }
+		local last = s.hist[#s.hist]
+		if file ~= "" and vim.fn.filereadable(file) == 1
+			and not (last and last.file == file and last.lnum == j.lnum) then
+			s.hist[#s.hist + 1] = { file = file, lnum = j.lnum, col = j.col or 0 }
 		end
 	end
-	idx = #hist
-	jump_mark = M._jumplist_state()
-	local _, lnum, col, file = here()
-	anchor(file, lnum, col, true)
+	s.idx = #s.hist
+	sync_jumps()
+end
+
+local function is_visual(mode)
+	return mode:match("^[vV\22]") ~= nil
 end
 
 function M.setup()
-	vim.api.nvim_create_autocmd("VimEnter", {
-		group = vim.api.nvim_create_augroup("cursor-history", { clear = true }),
-		once = true,
-		callback = seed,
-	})
+	local group = vim.api.nvim_create_augroup("cursor-history", { clear = true })
+	local function on(event, callback, opts)
+		vim.api.nvim_create_autocmd(event, vim.tbl_extend("force",
+			{ group = group, callback = function() pcall(callback) end }, opts or {}))
+	end
 
-	if timer then timer:stop() end
-	timer = vim.uv.new_timer()
-	timer:start(TICK, TICK, vim.schedule_wrap(function()
-		pcall(tick)
-	end))
+	on("VimEnter", seed, { once = true })
+	on("CursorMoved", check_jump)
+	on({ "InsertEnter", "InsertLeave" }, record_here)
+	on("ModeChanged", function()
+		local old, new = vim.v.event.old_mode, vim.v.event.new_mode
+		if is_visual(old) ~= is_visual(new) then record_here() end
+	end)
+	on("TextYankPost", function()
+		if vim.v.event.operator == "y" then record_here() end
+	end)
+	on("TabLeave", function() parent = vim.api.nvim_get_current_tabpage() end)
+	on("TabClosed", function()
+		for tab, s in pairs(tabs) do
+			if not vim.api.nvim_tabpage_is_valid(tab) then
+				for _, entry in ipairs(s.hist) do drop(entry) end
+				tabs[tab] = nil
+			end
+		end
+	end)
+	on("WinClosed", function(args) jump_marks[tonumber(args.match)] = nil end)
+
+	-- paste has no autocmd: watch for p / P (also gp, "xp, copy mode's "+p, ...)
+	-- typed in normal / visual mode and record where the paste landed
+	vim.on_key(function(key)
+		if (key == "p" or key == "P") and (vim.fn.mode() == "n" or is_visual(vim.fn.mode())) then
+			vim.schedule(function() pcall(record_here) end)
+		end
+	end, ns)
 end
 
 return M
