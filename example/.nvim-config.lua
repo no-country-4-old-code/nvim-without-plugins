@@ -82,22 +82,16 @@ return {
 			vim.lsp.config("clangd", { cmd = clangd_cmd, root_dir = farm_dir })
 
 			-- go to declaration lands on the farm symlink; open the real file
-			-- instead, so the path, git signs and tabs show the actual repo
-			vim.api.nvim_create_autocmd("BufReadPost", {
-				pattern = farm_dir .. "/*",
-				callback = function(ev)
-					local real = vim.fn.resolve(ev.match)
-					if real == ev.match then return end
-					vim.schedule(function() -- after the LSP jump has placed the cursor
-						for _, win in ipairs(vim.fn.win_findbuf(ev.buf)) do
-							local pos = vim.api.nvim_win_get_cursor(win)
-							vim.api.nvim_win_call(win, function() vim.cmd.edit(vim.fn.fnameescape(real)) end)
-							vim.api.nvim_win_set_cursor(win, pos)
-						end
-						if vim.fn.bufwinid(ev.buf) == -1 then pcall(vim.api.nvim_buf_delete, ev.buf, {}) end
-					end)
-				end,
-			})
+			-- instead, so the path, git signs and tabs show the actual repo. This has
+			-- to happen where the LSP turns a URI into a buffer: nvim matches buffers
+			-- by inode, so a farm buffer can not be swapped for the real file later.
+			local farm_prefix = vim.fn.resolve(farm_dir) .. "/"
+			local uri_to_fname = vim.uri_to_fname
+			vim.uri_to_fname = function(uri)
+				local fname = uri_to_fname(uri)
+				return vim.startswith(fname, farm_prefix) and vim.fn.resolve(fname) or fname
+			end
+			vim.uri_to_bufnr = function(uri) return vim.fn.bufadd(vim.uri_to_fname(uri)) end
 
 			-- foo.h <-> foo.c / foo.cpp via the farm (header and source live in
 			-- different folders, so clangd's own switch rarely finds them)
