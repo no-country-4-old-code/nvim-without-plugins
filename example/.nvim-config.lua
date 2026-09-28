@@ -48,6 +48,13 @@ return {
 		ignore_folders = { "build", "node_modules", ".venv" },
 	},
 
+	-- Format on save: after writing a file matching `pattern`, run `cmd` with
+	-- the file's absolute path appended (in the file's folder), then reload it.
+	-- default value : {} --> no formatting on save
+	format = {
+		{ pattern = { "*.c", "*.cpp", "*.h", "*.hpp" }, cmd = { "format.sh", "-f", "-p" } },
+	},
+
 	-- Run at the end of init.lua, after all modules are set up 
     -- so keymaps win over the built-in ones. Put anything that needs to *execute*
 	-- in here: LSP tweaks, own keymaps, autocmds, ...

@@ -4,6 +4,7 @@
 --
 --   return {
 --   	search = { root = "~/work/project", ignore_folders = { "build", ".venv" } },
+--   	format = { { pattern = { "*.c" }, cmd = { "format.sh" } } }, -- behaviour.format-on-save
 --   	setup  = function() ... end,   -- own keymaps / vim.lsp.config / ...
 --   }
 --
@@ -17,6 +18,7 @@ local defaults = {
 		root = "",           -- "" -> search the directory nvim was started in
 		ignore_folders = {}, -- list of folder names, or one "a,b c" string
 	},
+	format = {},             -- format-on-save rules, see behaviour.format-on-save
 	setup = nil,             -- function, run at the end of init.lua
 }
 

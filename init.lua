@@ -60,6 +60,7 @@ require("custom.yank-ring").setup()
 -- plugin replacements
 require("behaviour.auto-complete").setup()
 require("behaviour.git-signs").setup()
+require("behaviour.format-on-save").setup()
 require("core.lsp").setup()
 require("core.debug").setup()
 require("core.statusline").setup()
